@@ -2,6 +2,7 @@ package meta
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"fmt"
 	"os"
 )
@@ -88,6 +89,79 @@ func ParseTorrent(data []byte) (*Torrent, error) {
 	}
 
 	return torrent, nil
+}
+
+func (t *Torrent) InfoHash() ([20]byte, error) {
+	return calculateInfoHash(t.Info)
+}
+
+func calculateInfoHash(info InfoDict) ([20]byte, error) {
+
+	encoded, err := encodeBencodeInfoDict(info)
+	if err != nil {
+		return [20]byte{}, fmt.Errorf("failed to encode info dict: %w", err)
+	}
+
+	// Calculate SHA1 hash
+	hash := sha1.Sum(encoded)
+	return hash, nil
+}
+
+func encodeBencodeInfoDict(info InfoDict) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// Start dictionary
+	buf.WriteString("d")
+
+	if len(info.Files) > 0 {
+		buf.WriteString(fmt.Sprintf("%d:files", len("files")))
+		buf.WriteString("l")
+		for _, file := range info.Files {
+			buf.WriteString("d")
+			// length
+			buf.WriteString(fmt.Sprintf("%d:length", len("length")))
+			buf.WriteString(fmt.Sprintf("i%de", file.Length))
+			// path
+			buf.WriteString(fmt.Sprintf("%d:path", len("path")))
+			buf.WriteString("l")
+			for _, component := range file.Path {
+				buf.WriteString(fmt.Sprintf("%d:%s", len(component), component))
+			}
+			buf.WriteString("e") // end path list
+			buf.WriteString("e") // end file dict
+		}
+		buf.WriteString("e") // end files list
+	}
+
+	//length field (for single-file torrents)
+	if info.Length > 0 {
+		buf.WriteString(fmt.Sprintf("%d:length", len("length")))
+		buf.WriteString(fmt.Sprintf("i%de", info.Length))
+	}
+
+	//name field (required)
+	buf.WriteString(fmt.Sprintf("%d:name", len("name")))
+	buf.WriteString(fmt.Sprintf("%d:%s", len(info.Name), info.Name))
+
+	//piece length field (required)
+	buf.WriteString(fmt.Sprintf("%d:piece length", len("piece length")))
+	buf.WriteString(fmt.Sprintf("i%de", info.PieceLength))
+
+	//pieces field (required)
+	buf.WriteString(fmt.Sprintf("%d:pieces", len("pieces")))
+	buf.WriteString(fmt.Sprintf("%d:", len(info.Pieces)))
+	buf.Write(info.Pieces)
+
+	//private field (if present)
+	if info.Private > 0 {
+		buf.WriteString(fmt.Sprintf("%d:private", len("private")))
+		buf.WriteString(fmt.Sprintf("i%de", info.Private))
+	}
+
+	//end dictionary
+	buf.WriteString("e")
+
+	return buf.Bytes(), nil
 }
 
 func parseInfoDict(dict BDict) (*InfoDict, error) {

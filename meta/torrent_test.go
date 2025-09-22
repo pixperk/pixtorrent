@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -219,4 +220,113 @@ func TestParseTorrent_InfoDictErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTorrent_InfoHash(t *testing.T) {
+	t.Run("single file torrent", func(t *testing.T) {
+		// Create a torrent with known data
+		data := generateSingleFileTorrentData(
+			"http://tracker.example.com/announce",
+			"test.txt",
+			1024,
+			32768,
+			[]byte("01234567890123456789"), // 20 bytes
+		)
+
+		torrent, err := ParseTorrent(data)
+		if err != nil {
+			t.Fatalf("ParseTorrent failed: %v", err)
+		}
+
+		// Calculate info hash
+		hash, err := torrent.InfoHash()
+		if err != nil {
+			t.Fatalf("InfoHash failed: %v", err)
+		}
+
+		// Verify it's a valid 20-byte hash
+		if len(hash) != 20 {
+			t.Errorf("Expected 20-byte hash, got %d bytes", len(hash))
+		}
+
+		// Calculate hash again - should be deterministic
+		hash2, err := torrent.InfoHash()
+		if err != nil {
+			t.Fatalf("Second InfoHash failed: %v", err)
+		}
+
+		if hash != hash2 {
+			t.Error("InfoHash should be deterministic - got different hashes")
+		}
+
+		// Verify hash is not all zeros (empty hash)
+		emptyHash := [20]byte{}
+		if hash == emptyHash {
+			t.Error("InfoHash should not be empty/zero")
+		}
+
+		t.Logf("Info hash: %x", hash)
+	})
+
+	t.Run("different torrents have different hashes", func(t *testing.T) {
+		// Create two different torrents
+		data1 := generateSingleFileTorrentData(
+			"http://tracker.example.com/announce",
+			"file1.txt",
+			1024,
+			32768,
+			[]byte("01234567890123456789"),
+		)
+
+		data2 := generateSingleFileTorrentData(
+			"http://tracker.example.com/announce",
+			"file2.txt", // Different name
+			1024,
+			32768,
+			[]byte("01234567890123456789"),
+		)
+
+		torrent1, _ := ParseTorrent(data1)
+		torrent2, _ := ParseTorrent(data2)
+
+		hash1, err1 := torrent1.InfoHash()
+		hash2, err2 := torrent2.InfoHash()
+
+		if err1 != nil || err2 != nil {
+			t.Fatalf("InfoHash failed: %v, %v", err1, err2)
+		}
+
+		if hash1 == hash2 {
+			t.Error("Different torrents should have different info hashes")
+		}
+
+		t.Logf("Hash 1: %x", hash1)
+		t.Logf("Hash 2: %x", hash2)
+	})
+
+	t.Run("verify hash with known expected value", func(t *testing.T) {
+		// Create a torrent with specific known data
+		torrent := &Torrent{
+			Info: InfoDict{
+				Name:        "test",
+				Length:      100,
+				PieceLength: 32768,
+				Pieces:      []byte("12345678901234567890"), // exactly 20 bytes
+			},
+		}
+
+		hash, err := torrent.InfoHash()
+		if err != nil {
+			t.Fatalf("InfoHash failed: %v", err)
+		}
+
+		// Manually calculate expected hash for verification
+		expectedData := "d6:lengthi100e4:name4:test12:piece lengthi32768e6:pieces20:12345678901234567890e"
+		expectedHash := sha1.Sum([]byte(expectedData))
+
+		if hash != expectedHash {
+			t.Errorf("Hash mismatch:\nGot:      %x\nExpected: %x", hash, expectedHash)
+			t.Logf("Generated bencode: %s", expectedData)
+		}
+	})
 }
