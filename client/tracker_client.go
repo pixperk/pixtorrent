@@ -153,6 +153,62 @@ func (tc *TrackerClient) parseAnnounceResponse(decoded meta.Node) (*AnnounceResp
 	return response, nil
 }
 
+type ScrapeResponse struct {
+	Complete   int
+	Incomplete int
+	Downloaded int
+}
+
+func (tc *TrackerClient) Scrape(trackerURL string, infoHash [20]byte) (*ScrapeResponse, error) {
+	u, err := url.Parse(trackerURL)
+	if err != nil {
+		return nil, err
+	}
+	u.Path = "/scrape"
+	params := url.Values{}
+	params.Set("info_hash", string(infoHash[:]))
+	u.RawQuery = params.Encode()
+
+	resp, err := tc.client.Get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := meta.NewDecoder(bytes.NewReader(body))
+	decoded, err := decoder.Decode()
+	if err != nil {
+		return nil, err
+	}
+
+	dict, ok := decoded.(meta.BDict)
+	if !ok {
+		return nil, fmt.Errorf("invalid scrape response")
+	}
+	files, ok := dict["files"].(meta.BDict)
+	if !ok {
+		return nil, fmt.Errorf("missing files in scrape response")
+	}
+	// Use the first info_hash key
+	for _, v := range files {
+		stats, ok := v.(meta.BDict)
+		if !ok {
+			continue
+		}
+		return &ScrapeResponse{
+			Complete:   int(stats["complete"].(meta.BInt)),
+			Incomplete: int(stats["incomplete"].(meta.BInt)),
+			Downloaded: int(stats["downloaded"].(meta.BInt)),
+		}, nil
+	}
+	return nil, fmt.Errorf("no stats found")
+}
+
 func (tc *TrackerClient) UpdateStats(uploaded, downloaded int64) {
 	tc.uploaded = uploaded
 	tc.downloaded = downloaded
