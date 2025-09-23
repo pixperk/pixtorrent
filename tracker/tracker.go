@@ -20,10 +20,21 @@ type TorrentInfo struct {
 }
 
 type Storage interface {
-	GetTorrent(infoHash [20]byte) (*TorrentInfo, error)
-	UpdateTorrent(infoHash [20]byte, torrent *TorrentInfo) error
-	AddPeer(infoHash [20]byte, peer *Peer, event string) error
+	// Peer management
+	AddPeer(infoHash [20]byte, peer *Peer) error
 	RemovePeer(infoHash [20]byte, peerID string) error
-	UpdatePeer(infoHash [20]byte, peer *Peer) error
-	GetPeers(infoHash [20]byte, numWant int, compact bool) ([]*Peer, error)
+	GetPeer(peerID string) (*Peer, error)
+	GetPeers(infoHash [20]byte, maxPeers int) ([]*Peer, error)
+	GetSeeders(infoHash [20]byte, maxPeers int) ([]*Peer, error)
+	GetLeechers(infoHash [20]byte, maxPeers int) ([]*Peer, error)
+	UpdatePeerLastSeen(peerID string) error
+
+	// Torrent management
+	GetTorrentStats(infoHash [20]byte) (*TorrentInfo, error)
+	IncrementCompleted(infoHash [20]byte) error
+	GetActiveTorrents() ([]string, error)
+
+	// Maintenance
+	CleanupExpiredPeers() error
+	Close() error
 }
