@@ -22,13 +22,19 @@ func (p *TCPPeer) Send(data []byte) error {
 	return err
 }
 
+func (p *TCPPeer) ID() string {
+	if p.id == "" {
+		p.id = p.RemoteAddr().String()
+	}
+	return p.id
+}
+
 type TCPTransportOpts struct {
 	ListenAddr    string
 	HandshakeFunc HandshakeFunc
 	Decoder       Decoder
 	OnPeer        func(Peer) error
 	InfoHash      [20]byte
-	PeerID        string
 }
 
 type TCPTransport struct {
@@ -106,7 +112,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	}()
 	peer := NewTCPPeer(conn, outbound)
 	if t.HandshakeFunc != nil {
-		if err = t.HandshakeFunc(peer, t.InfoHash, t.PeerID); err != nil {
+		if err = t.HandshakeFunc(peer, t.InfoHash); err != nil {
 			return
 		}
 	}

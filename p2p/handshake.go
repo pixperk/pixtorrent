@@ -7,9 +7,9 @@ import (
 	"io"
 )
 
-type HandshakeFunc func(Peer, [20]byte, string) error
+type HandshakeFunc func(Peer, [20]byte) error
 
-func NOPHandshakeFunc(Peer, [20]byte, string) error { return nil }
+func NOPHandshakeFunc(Peer, [20]byte) error { return nil }
 
 // Handshake structure:
 // <pstrlen><pstr><reserved><info_hash><peer_id>
@@ -18,9 +18,9 @@ func NOPHandshakeFunc(Peer, [20]byte, string) error { return nil }
 // - reserved: 8 bytes, all zero
 // - info_hash: 20 bytes
 // - peer_id: 20 bytes
-func DefaultHandshakeFunc(peer Peer, infoHash [20]byte, peerID string) error {
+func DefaultHandshakeFunc(peer Peer, infoHash [20]byte) error {
 	// send handshake
-	hs := buildHandshake(infoHash, peerID)
+	hs := buildHandshake(infoHash, peer.ID())
 	_, err := peer.Write(hs)
 	if err != nil {
 		return err
