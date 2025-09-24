@@ -26,9 +26,6 @@ func TestBinaryEncoderDecoder(t *testing.T) {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	t.Logf("Original RPC: %s", rpc.String())
-	t.Logf("Decoded RPC: %s", decodedRPC.String())
-
 	if !bytes.Equal(decodedRPC.Payload, payload) {
 		t.Errorf("Payload mismatch: got %x, want %x", decodedRPC.Payload, payload)
 	}

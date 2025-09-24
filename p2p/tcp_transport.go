@@ -27,6 +27,8 @@ type TCPTransportOpts struct {
 	HandshakeFunc HandshakeFunc
 	Decoder       Decoder
 	OnPeer        func(Peer) error
+	InfoHash      [20]byte
+	PeerID        string
 }
 
 type TCPTransport struct {
@@ -84,9 +86,9 @@ func (t *TCPTransport) acceptLoop() {
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
-			if err != nil {
-				fmt.Printf("tcp accept error: %v\n", err)
-			}
+
+			fmt.Printf("tcp accept error: %v\n", err)
+
 		}
 
 		fmt.Printf("new tcp connection from %s\n", conn.RemoteAddr().String())
@@ -104,7 +106,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	}()
 	peer := NewTCPPeer(conn, outbound)
 	if t.HandshakeFunc != nil {
-		if err = t.HandshakeFunc(peer); err != nil {
+		if err = t.HandshakeFunc(peer, t.InfoHash, t.PeerID); err != nil {
 			return
 		}
 	}
