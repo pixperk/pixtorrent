@@ -10,6 +10,7 @@ type Peer interface {
 
 type Transport interface {
 	Addr() string
+	Port() int
 	ListenAndAccept() error
 	Consume() <-chan RPC
 	Close() error

@@ -56,6 +56,10 @@ func (t *TCPTransport) Addr() string {
 	return t.listener.Addr().String()
 }
 
+func (t *TCPTransport) Port() int {
+	return t.listener.Addr().(*net.TCPAddr).Port
+}
+
 func (t *TCPTransport) Consume() <-chan RPC {
 	return t.rpcch
 }
