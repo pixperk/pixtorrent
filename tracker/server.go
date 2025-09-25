@@ -153,6 +153,9 @@ func getClientIP(r *http.Request) string {
 	}
 
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if ip == "::1" {
+		return "127.0.0.1"
+	}
 	return ip
 }
 

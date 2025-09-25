@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"strconv"
+	"strings"
+	"time"
 
 	"github.com/pixperk/pixtorrent/client"
 	"github.com/pixperk/pixtorrent/p2p"
@@ -14,6 +15,7 @@ import (
 type TorrentServerOpts struct {
 	Transport        p2p.Transport
 	TCPTransportOpts p2p.TCPTransportOpts
+	TrackerUrl       string
 }
 
 type TorrentServer struct {
@@ -21,8 +23,6 @@ type TorrentServer struct {
 	swarm *p2p.Swarm
 
 	peerID string
-
-	trackerUrl string
 
 	quitch chan struct{}
 }
@@ -80,9 +80,13 @@ func (ts *TorrentServer) Start() error {
 		return err
 	}
 
+	time.Sleep(500 * time.Millisecond)
+
 	if err := ts.bootstrapNetwork(); err != nil {
 		return err
 	}
+
+	time.Sleep(500 * time.Millisecond)
 
 	ts.loop()
 	return nil
@@ -131,25 +135,28 @@ func (ts *TorrentServer) loop() {
 }
 
 func (ts *TorrentServer) bootstrapNetwork() error {
-	//announce to tracker and get peers
-	tc := client.NewTrackerClient(
-		ts.peerID,
-		ts.Transport.Port(),
-	)
+	tc := client.NewTrackerClient(ts.peerID, ts.Transport.Port())
 
-	resp, err := tc.Announce(ts.trackerUrl, ts.TCPTransportOpts.InfoHash, 0, "started")
+	resp, err := tc.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, 0, "started")
 	if err != nil {
 		return err
 	}
 
 	for _, p := range resp.Peers {
-		addr := p.IP + ":" + strconv.Itoa(p.Port)
+		addr := formatAddr(p.IP, p.Port)
 		if err := ts.Transport.Dial(addr); err != nil {
 			log.Printf("[%s] dial error %s: %v", p.PeerID, addr, err)
 		}
 	}
 
 	return nil
+}
+
+func formatAddr(ip string, port int) string {
+	if strings.Contains(ip, ":") { // ipv6
+		return fmt.Sprintf("[%s]:%d", ip, port)
+	}
+	return fmt.Sprintf("%s:%d", ip, port)
 }
 
 func newPeerId() string {
