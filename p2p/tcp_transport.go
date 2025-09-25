@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -22,10 +23,12 @@ func (p *TCPPeer) Send(data []byte) error {
 	return err
 }
 
+func (p *TCPPeer) SetID(id string) {
+	p.id = id
+}
+
 func (p *TCPPeer) ID() string {
-	if p.id == "" {
-		p.id = p.RemoteAddr().String()
-	}
+
 	return p.id
 }
 
@@ -43,12 +46,14 @@ type TCPTransport struct {
 	TCPTransportOpts
 	listener net.Listener
 	rpcch    chan RPC
+	localID  string // our own peer ID
 }
 
 func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
 	return &TCPTransport{
 		TCPTransportOpts: opts,
 		rpcch:            make(chan RPC, 1024),
+		localID:          generate20ByteID(),
 	}
 }
 
@@ -118,7 +123,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	}()
 	peer := NewTCPPeer(conn, outbound)
 	if t.Handshake != nil {
-		if err = t.Handshake(peer, t.InfoHash); err != nil {
+		if err = t.Handshake(peer, t.InfoHash, t.localID); err != nil {
 			return
 		}
 	}
@@ -141,4 +146,12 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 
 		t.rpcch <- rpc
 	}
+}
+
+func generate20ByteID() string {
+	id := make([]byte, 20)
+	if _, err := rand.Read(id); err != nil {
+		panic(err) // should never happen
+	}
+	return string(id) // raw bytes
 }

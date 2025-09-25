@@ -4,6 +4,7 @@ import "net"
 
 type Peer interface {
 	net.Conn
+	SetID(string)
 	Send([]byte) error
 	ID() string
 }
