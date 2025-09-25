@@ -28,11 +28,10 @@ func (p *TCPPeer) SetID(id string) {
 }
 
 func (p *TCPPeer) ID() string {
-
 	return p.id
 }
 
-type OnPeerFunc func(Peer, [20]byte) error
+type OnPeerFunc func(Peer) error
 
 type TCPTransportOpts struct {
 	ListenAddr string
@@ -129,7 +128,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	}
 
 	if t.OnPeer != nil {
-		if err = t.OnPeer(peer, t.InfoHash); err != nil {
+		if err = t.OnPeer(peer); err != nil {
 			return
 		}
 	}

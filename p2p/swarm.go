@@ -29,9 +29,27 @@ func (s *Swarm) AddPeer(p Peer) error {
 	return nil
 }
 
+func (s *Swarm) GetPeer(id string) (Peer, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, exists := s.peers[id]
+	return p, exists
+}
+
 func (s *Swarm) OnPeer(p Peer) error {
 	fmt.Printf("peer %s joined torrent %x\n", p.ID(), s.infoHash)
 	s.AddPeer(p)
 	//send initial message [bitfield, interested, etc]
 	return nil
+}
+
+func (s *Swarm) Peers() []Peer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// return a copy to avoid concurrent map access
+	peers := make([]Peer, 0, len(s.peers))
+	for _, p := range s.peers {
+		peers = append(peers, p)
+	}
+	return peers
 }
