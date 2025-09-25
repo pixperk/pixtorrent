@@ -29,12 +29,14 @@ func (p *TCPPeer) ID() string {
 	return p.id
 }
 
+type OnPeerFunc func(Peer, [20]byte) error
+
 type TCPTransportOpts struct {
-	ListenAddr    string
-	HandshakeFunc HandshakeFunc
-	Decoder       Decoder
-	OnPeer        func(Peer) error
-	InfoHash      [20]byte
+	ListenAddr string
+	Handshake  HandshakeFunc
+	Decoder    Decoder
+	OnPeer     OnPeerFunc
+	InfoHash   [20]byte
 }
 
 type TCPTransport struct {
@@ -50,8 +52,8 @@ func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
 	}
 }
 
-func (t *TCPTransport) Addr() net.Addr {
-	return t.listener.Addr()
+func (t *TCPTransport) Addr() string {
+	return t.listener.Addr().String()
 }
 
 func (t *TCPTransport) Consume() <-chan RPC {
@@ -111,14 +113,14 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		conn.Close()
 	}()
 	peer := NewTCPPeer(conn, outbound)
-	if t.HandshakeFunc != nil {
-		if err = t.HandshakeFunc(peer, t.InfoHash); err != nil {
+	if t.Handshake != nil {
+		if err = t.Handshake(peer, t.InfoHash); err != nil {
 			return
 		}
 	}
 
 	if t.OnPeer != nil {
-		if err = t.OnPeer(peer); err != nil {
+		if err = t.OnPeer(peer, t.InfoHash); err != nil {
 			return
 		}
 	}
