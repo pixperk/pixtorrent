@@ -25,16 +25,18 @@ type TorrentServer struct {
 	peerID string
 
 	quitch chan struct{}
+
+	bootstrapNodes []string
 }
 
 func NewTorrentServer(opts TorrentServerOpts) *TorrentServer {
 	ts := &TorrentServer{
 		TorrentServerOpts: opts,
-		swarm:             p2p.NewSwarm(opts.TCPTransportOpts.InfoHash),
 		peerID:            newPeerId(),
 		quitch:            make(chan struct{}),
 	}
 
+	ts.swarm = p2p.NewSwarm(opts.TCPTransportOpts.InfoHash)
 	opts.TCPTransportOpts.OnPeer = ts.swarm.OnPeer
 
 	return ts
@@ -88,14 +90,29 @@ func (ts *TorrentServer) Start() error {
 
 	time.Sleep(500 * time.Millisecond)
 
+	go func() {
+		if err := ts.AnnounceHave(0); err != nil {
+			log.Printf("AnnounceHave error: %v", err)
+		}
+	}()
+	go func() {
+		if err := ts.RequestPiece(1); err != nil {
+			log.Printf("RequestPiece error: %v", err)
+		}
+	}()
 	ts.loop()
 	return nil
+}
+
+func (ts *TorrentServer) Stop() {
+	close(ts.quitch)
+	ts.Transport.Close()
 }
 
 func (ts *TorrentServer) loop() {
 	defer func() {
 		log.Println("torrent server stopped")
-		ts.Transport.Close()
+		ts.Stop()
 	}()
 
 	for {
@@ -107,7 +124,9 @@ func (ts *TorrentServer) loop() {
 			}
 
 			msgType := rpc.Payload[0]
+			fmt.Printf("Received RPC type %d from %s\n", msgType, rpc.From)
 			payloadData := rpc.Payload[1:]
+			fmt.Printf("Payload data: %x\n", payloadData)
 
 			switch msgType {
 			case p2p.MsgInterested:
@@ -135,6 +154,23 @@ func (ts *TorrentServer) loop() {
 }
 
 func (ts *TorrentServer) bootstrapNetwork() error {
+	if err := ts.populateBootstrapNodes(); err != nil {
+		return err
+	}
+
+	for _, addr := range ts.bootstrapNodes {
+
+		go func(addr string) {
+			if err := ts.Transport.Dial(addr); err != nil {
+				log.Printf("Failed to dial bootstrap node %s: %v", addr, err)
+			}
+		}(addr)
+	}
+
+	return nil
+}
+
+func (ts *TorrentServer) populateBootstrapNodes() error {
 	tc := client.NewTrackerClient(ts.peerID, ts.Transport.Port())
 
 	resp, err := tc.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, 0, "started")
@@ -142,10 +178,20 @@ func (ts *TorrentServer) bootstrapNetwork() error {
 		return err
 	}
 
+	unique := make(map[string]struct{})
 	for _, p := range resp.Peers {
 		addr := formatAddr(p.IP, p.Port)
-		if err := ts.Transport.Dial(addr); err != nil {
-			log.Printf("[%s] dial error %s: %v", p.PeerID, addr, err)
+		if addr == ts.Transport.Addr() {
+			continue
+		}
+
+		if ts.Transport.Addr() > addr {
+			continue
+		}
+
+		if _, exists := unique[addr]; !exists {
+			unique[addr] = struct{}{}
+			ts.bootstrapNodes = append(ts.bootstrapNodes, addr)
 		}
 	}
 

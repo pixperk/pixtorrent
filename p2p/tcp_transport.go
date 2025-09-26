@@ -117,23 +117,38 @@ func (t *TCPTransport) acceptLoop() {
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 	defer func() {
-		fmt.Printf("dropping peer connection : %s", err)
+		if err != nil {
+			fmt.Println("dropping peer connection:", err)
+		}
 		conn.Close()
 	}()
+
 	peer := NewTCPPeer(conn, outbound)
+
+	// Perform handshake
 	if t.Handshake != nil {
-		if err = t.Handshake(peer, t.InfoHash, t.localID); err != nil {
+		if err = t.Handshake(peer, t.InfoHash, t.localID, outbound); err != nil {
+			fmt.Println("handshake failed:", err)
 			return
 		}
 	}
 
+	// Prevent self-connection
+	if peer.ID() == string(t.localID) {
+		fmt.Println("dropping peer connection: connected to self, peer ID:", peer.ID())
+		return
+	}
+
+	// Register peer in swarm
 	if t.OnPeer != nil {
 		if err = t.OnPeer(peer); err != nil {
+			// OnPeer can reject duplicates or invalid peers
+			fmt.Println("dropping peer connection:", err)
 			return
 		}
 	}
 
-	//read loop
+	// Read loop
 	for {
 		rpc := RPC{}
 		err = t.Decoder.Decode(conn, &rpc)
@@ -142,7 +157,6 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		}
 
 		rpc.From = conn.RemoteAddr().String()
-
 		t.rpcch <- rpc
 	}
 }

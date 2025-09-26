@@ -7,30 +7,30 @@ import (
 	"io"
 )
 
-type HandshakeFunc func(Peer, [20]byte, string) error
+type HandshakeFunc func(Peer, [20]byte, string, bool) error
 
-func NOPHandshakeFunc(Peer, [20]byte, string) error { return nil }
+func NOPHandshakeFunc(Peer, [20]byte, string, bool) error { return nil }
 
 // Handshake structure:
 // <pstrlen><pstr><reserved><info_hash><peer_id>
-// - pstrlen: 1 byte, length of pstr (19 for "piXTorrent protocol")
-// - pstr: "piXTorrent protocol"
-// - reserved: 8 bytes, all zero
-// - info_hash: 20 bytes
-// - peer_id: 20 bytes
-func DefaultHandshakeFunc(peer Peer, infoHash [20]byte, localID string) error {
-	// send handshake with our own peer ID
+func DefaultHandshakeFunc(peer Peer, infoHash [20]byte, localID string, outbound bool) error {
 	hs := buildHandshake(infoHash, localID)
-	_, err := peer.Write(hs)
-	if err != nil {
-		return err
-	}
-
-	// read remote peer handshake
 	resp := make([]byte, len(hs))
-	_, err = io.ReadFull(peer, resp)
-	if err != nil {
-		return err
+
+	if outbound {
+		if _, err := peer.Write(hs); err != nil {
+			return err
+		}
+		if _, err := io.ReadFull(peer, resp); err != nil {
+			return err
+		}
+	} else {
+		if _, err := io.ReadFull(peer, resp); err != nil {
+			return err
+		}
+		if _, err := peer.Write(hs); err != nil {
+			return err
+		}
 	}
 
 	// validate protocol
@@ -47,8 +47,11 @@ func DefaultHandshakeFunc(peer Peer, infoHash [20]byte, localID string) error {
 			hex.EncodeToString(receivedInfoHash))
 	}
 
-	// extract remote peer ID and assign to peer
+	// extract remote peer ID
 	receivedPeerID := string(resp[1+pstrlen+8+20:])
+	if receivedPeerID == localID {
+		return fmt.Errorf("connected to self, peer ID: %s", receivedPeerID)
+	}
 	peer.SetID(receivedPeerID)
 	fmt.Println("handshake success with peer id:", receivedPeerID)
 	return nil
