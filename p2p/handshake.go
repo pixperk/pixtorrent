@@ -53,7 +53,8 @@ func DefaultHandshakeFunc(peer Peer, infoHash [20]byte, localID string, outbound
 		return fmt.Errorf("connected to self, peer ID: %s", receivedPeerID)
 	}
 	peer.SetID(receivedPeerID)
-	fmt.Println("handshake success with peer id:", receivedPeerID)
+	fmt.Printf("[%s]handshake success with peer id: %s\n", peer.RemoteAddr().String(), receivedPeerID)
+
 	return nil
 }
 
