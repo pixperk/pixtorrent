@@ -9,13 +9,7 @@ type Decoder interface {
 	Decode(io.Reader, *RPC) error
 }
 
-type Encoder interface {
-	Encode(i *RPC) ([]byte, error)
-}
-
 type BinaryDecoder struct{}
-
-type BinaryEncoder struct{}
 
 func (d *BinaryDecoder) Decode(r io.Reader, rpc *RPC) error {
 	var len uint32
@@ -36,11 +30,4 @@ func (d *BinaryDecoder) Decode(r io.Reader, rpc *RPC) error {
 
 	rpc.Payload = buf
 	return nil
-}
-
-func (e *BinaryEncoder) Encode(rpc *RPC) ([]byte, error) {
-	buf := make([]byte, 4+len(rpc.Payload))
-	binary.BigEndian.PutUint32(buf[:4], uint32(len(rpc.Payload)))
-	copy(buf[4:], rpc.Payload)
-	return buf, nil
 }

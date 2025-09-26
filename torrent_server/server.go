@@ -54,14 +54,14 @@ func (ts *TorrentServer) RequestPiece(pieceIndex int) error {
 }
 
 // Respond to a piece request
-func (ts *TorrentServer) SendPiece(pieceIndex int, peerID string) error {
+func (ts *TorrentServer) SendPiece(pieceIndex int, peerID [20]byte) error {
 	payload := append([]byte{p2p.MsgSendPiece}, []byte(fmt.Sprintf("piece-%d-data", pieceIndex))...)
 	peer, exists := ts.swarm.GetPeer(peerID)
 	if !exists {
-		return fmt.Errorf("peer %s not found", peerID)
+		return fmt.Errorf("peer %x not found", peerID)
 	}
 	if err := peer.Send(payload); err != nil {
-		return fmt.Errorf("failed to send piece to %s: %v", peerID, err)
+		return fmt.Errorf("failed to send piece to %x: %v", peerID, err)
 	}
 	return nil
 }

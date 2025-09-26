@@ -4,9 +4,9 @@ import "net"
 
 type Peer interface {
 	net.Conn
-	SetID(string)
+	SetID([20]byte)
 	Send([]byte) error
-	ID() string
+	ID() [20]byte
 }
 
 type Transport interface {

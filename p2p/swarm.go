@@ -6,14 +6,14 @@ import (
 )
 
 type Swarm struct {
-	peers    map[string]Peer
+	peers    map[[20]byte]Peer
 	mu       sync.Mutex
 	infoHash [20]byte
 }
 
 func NewSwarm(infoHash [20]byte) *Swarm {
 	return &Swarm{
-		peers:    make(map[string]Peer),
+		peers:    make(map[[20]byte]Peer),
 		infoHash: infoHash,
 	}
 }
@@ -29,7 +29,7 @@ func (s *Swarm) AddPeer(p Peer) error {
 	return nil
 }
 
-func (s *Swarm) RemovePeer(id string) {
+func (s *Swarm) RemovePeer(id [20]byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (s *Swarm) RemovePeer(id string) {
 	}
 }
 
-func (s *Swarm) GetPeer(id string) (Peer, bool) {
+func (s *Swarm) GetPeer(id [20]byte) (Peer, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, exists := s.peers[id]

@@ -1,16 +1,21 @@
 package p2p
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
 	"net"
+	"sync"
 )
 
 type TCPPeer struct {
 	net.Conn
-	id       string
+	id [20]byte
+
+	mu       sync.Mutex
 	outbound bool
 }
 
@@ -19,15 +24,22 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 }
 
 func (p *TCPPeer) Send(data []byte) error {
-	_, err := p.Write(data)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	buf := make([]byte, 4+len(data))
+	binary.BigEndian.PutUint32(buf[:4], uint32(len(data)))
+	copy(buf[4:], data)
+
+	_, err := p.Write(buf)
 	return err
 }
 
-func (p *TCPPeer) SetID(id string) {
+func (p *TCPPeer) SetID(id [20]byte) {
 	p.id = id
 }
 
-func (p *TCPPeer) ID() string {
+func (p *TCPPeer) ID() [20]byte {
 	return p.id
 }
 
@@ -45,7 +57,7 @@ type TCPTransport struct {
 	TCPTransportOpts
 	listener net.Listener
 	rpcch    chan RPC
-	localID  string // our own peer ID
+	localID  [20]byte // our own peer ID
 }
 
 func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
@@ -134,8 +146,9 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	}
 
 	// Prevent self-connection
-	if peer.ID() == string(t.localID) {
-		fmt.Println("dropping peer connection: connected to self, peer ID:", peer.ID())
+	peerId := peer.ID()
+	if bytes.Equal(peerId[:], t.localID[:]) {
+		fmt.Println("dropping peer connection: connected to self, peer ID:", peerId)
 		return
 	}
 
@@ -150,21 +163,30 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 
 	// Read loop
 	for {
+		log.Println("we here")
 		rpc := RPC{}
 		err = t.Decoder.Decode(conn, &rpc)
 		if err != nil {
+			fmt.Printf("[%s] decode error: %v\n", conn.RemoteAddr(), err)
 			return
 		}
 
 		rpc.From = conn.RemoteAddr().String()
-		t.rpcch <- rpc
+		fmt.Printf("[%s] received RPC: %+v\n", rpc.From, rpc)
+
+		select {
+		case t.rpcch <- rpc:
+		default:
+			fmt.Println("rpc channel full, dropping message")
+			return
+		}
 	}
 }
 
-func generate20ByteID() string {
-	id := make([]byte, 20)
-	if _, err := rand.Read(id); err != nil {
-		panic(err) // should never happen
+func generate20ByteID() [20]byte {
+	var id [20]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		panic(err)
 	}
-	return string(id) // raw bytes
+	return id
 }
