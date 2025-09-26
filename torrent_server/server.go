@@ -37,9 +37,25 @@ func NewTorrentServer(opts TorrentServerOpts) *TorrentServer {
 	}
 
 	ts.swarm = p2p.NewSwarm(opts.TCPTransportOpts.InfoHash)
-	opts.TCPTransportOpts.OnPeer = ts.swarm.OnPeer
+
+	// prefer a transport supplied by caller; otherwise create one
+	if opts.Transport != nil {
+		ts.Transport = opts.Transport
+		// try to wire OnPeer if this is actually a *TCPTransport
+		if tt, ok := ts.Transport.(*p2p.TCPTransport); ok {
+			tt.OnPeer = ts.swarm.OnPeer
+		}
+	} else {
+		tcpTransport := p2p.NewTCPTransport(opts.TCPTransportOpts)
+		tcpTransport.OnPeer = ts.swarm.OnPeer
+		ts.Transport = tcpTransport
+	}
 
 	return ts
+}
+
+func (ts *TorrentServer) Swarm() *p2p.Swarm {
+	return ts.swarm
 }
 
 // Request a piece (simulate sending a request RPC)
@@ -90,7 +106,7 @@ func (ts *TorrentServer) Start() error {
 
 	time.Sleep(500 * time.Millisecond)
 
-	go func() {
+	/* go func() {
 		if err := ts.AnnounceHave(0); err != nil {
 			log.Printf("AnnounceHave error: %v", err)
 		}
@@ -99,7 +115,7 @@ func (ts *TorrentServer) Start() error {
 		if err := ts.RequestPiece(1); err != nil {
 			log.Printf("RequestPiece error: %v", err)
 		}
-	}()
+	}() */
 	ts.loop()
 	return nil
 }

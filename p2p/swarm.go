@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -51,6 +52,8 @@ func (s *Swarm) OnPeer(p Peer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	fmt.Println("OnPeer called with peer ID:", p.ID())
+
 	// Reject duplicate or self peers
 	if _, exists := s.peers[p.ID()]; exists {
 		fmt.Printf("duplicate peer %s, closing\n", p.ID())
@@ -58,8 +61,16 @@ func (s *Swarm) OnPeer(p Peer) error {
 		return fmt.Errorf("peer %s already exists", p.ID())
 	}
 
-	fmt.Printf("peer %s joined torrent %x\n", p.ID(), s.infoHash)
+	fmt.Printf("peer %x joined torrent %x\n", p.ID(), s.infoHash)
 	s.peers[p.ID()] = p
+
+	msg := []byte{MsgInterested}
+	if err := p.Send(msg); err != nil {
+		log.Printf("Failed to send message to %s: %v", p.ID(), err)
+	} else {
+		log.Printf("Sent INTERESTED to %x", p.ID())
+	}
+
 	return nil
 }
 

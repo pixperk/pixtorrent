@@ -27,11 +27,15 @@ func (p *TCPPeer) Send(data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	log.Println("sender triggered")
+
 	buf := make([]byte, 4+len(data))
 	binary.BigEndian.PutUint32(buf[:4], uint32(len(data)))
 	copy(buf[4:], data)
 
-	_, err := p.Write(buf)
+	n, err := p.Write(buf)
+	log.Printf("[SEND] %d bytes to %s, payload: %x", n, p.RemoteAddr(), buf)
+
 	return err
 }
 
