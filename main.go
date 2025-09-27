@@ -61,8 +61,11 @@ func main() {
 
 	log.Println("Peers connected! Sending messages…")
 	//debug swarm log
+	var srv2PeerID [20]byte
 	for _, peer := range server1.Swarm().Peers() {
+		srv2PeerID = peer.ID()
 		log.Printf("Server1 connected to peer: %x", peer.ID())
+
 	}
 	for _, peer := range server2.Swarm().Peers() {
 		log.Printf("Server2 connected to peer: %x", peer.ID())
@@ -71,8 +74,8 @@ func main() {
 	// Send messages both ways
 	_ = server1.RequestPiece(0)
 	_ = server2.RequestPiece(1)
-	if err := server1.SendPiece(6, server2.PeerID()); err != nil {
-		log.Printf("SendPiece error: %v", err)
+	if err := server1.SendPiece(6, srv2PeerID); err != nil {
+		panic("SendPiece error:	 " + err.Error())
 	}
 
 	select {}

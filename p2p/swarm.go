@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"fmt"
-	"log"
 	"sync"
 )
 
@@ -61,12 +60,7 @@ func (s *Swarm) OnPeer(p Peer) error {
 	fmt.Printf("peer %x joined torrent %x\n", p.ID(), s.infoHash)
 	s.peers[p.ID()] = p
 
-	msg := []byte{MsgInterested}
-	if err := p.Send(msg); err != nil {
-		log.Printf("Failed to send message to %s: %v", p.ID(), err)
-	} else {
-		log.Printf("Sent INTERESTED to %x", p.ID())
-	}
+	//TODO : send initial bitfield message
 
 	return nil
 }

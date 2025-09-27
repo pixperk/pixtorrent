@@ -134,6 +134,8 @@ func (ts *TorrentServer) loop() {
 				continue
 			}
 
+			//TODO : implement handling
+
 			msgType := rpc.Payload[0]
 			payloadData := rpc.Payload[1:]
 			fromaddr, fromid := rpc.From.Addr, rpc.From.PeerID
