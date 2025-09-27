@@ -17,26 +17,72 @@ type TCPPeer struct {
 
 	mu       sync.Mutex
 	outbound bool
+
+	outbox chan []byte
+	closed bool
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
-	return &TCPPeer{Conn: conn, outbound: outbound}
+	p := &TCPPeer{
+		Conn:     conn,
+		outbound: outbound,
+		outbox:   make(chan []byte, 16),
+	}
+
+	go p.writeLoop()
+	return p
 }
 
 func (p *TCPPeer) Send(data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	log.Println("sender triggered")
+	if p.closed {
+		p.mu.Unlock()
+		return errors.New("peer is closed")
+	}
 
 	buf := make([]byte, 4+len(data))
 	binary.BigEndian.PutUint32(buf[:4], uint32(len(data)))
 	copy(buf[4:], data)
 
-	n, err := p.Write(buf)
-	log.Printf("[SEND] %d bytes to %s, payload: %x", n, p.RemoteAddr(), buf)
+	select {
+	case p.outbox <- buf:
+		log.Printf("[ENQUEUE] queued %d bytes to %s", len(buf), p.RemoteAddr())
+		return nil
+	default:
+		return errors.New("outbox full, cannot send message")
+	}
+}
 
-	return err
+func (p *TCPPeer) writeLoop() {
+	for buf := range p.outbox {
+		tot := 0
+		for tot < len(buf) {
+			n, err := p.Write(buf[tot:])
+			if err != nil {
+				log.Printf("[PEER_WRITE_ERROR] failed to write to %s: %v", p.RemoteAddr(), err)
+				return
+			}
+			tot += n
+		}
+
+		log.Printf("[SENT] sent %d bytes to %s", len(buf), p.RemoteAddr())
+	}
+}
+
+func (p *TCPPeer) Close() error {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return nil
+	}
+	p.closed = true
+	// closing outbox signals writer to stop
+	close(p.outbox)
+	p.mu.Unlock()
+
+	return p.Conn.Close()
 }
 
 func (p *TCPPeer) SetID(id [20]byte) {
@@ -167,7 +213,6 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 
 	// Read loop
 	for {
-		log.Println("we here")
 		rpc := RPC{}
 		err = t.Decoder.Decode(conn, &rpc)
 		if err != nil {

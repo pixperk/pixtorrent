@@ -9,51 +9,61 @@ import (
 )
 
 func main() {
+
+	trackerUrl := "http://localhost:8080"
 	infoHash := [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 		11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 
-	ports := []string{"127.0.0.1:6881", "127.0.0.1:6882", "127.0.0.1:6883"}
-	servers := make([]*torrentserver.TorrentServer, 3)
+	// Create TCP transports
+	tcpOpts1 := p2p.TCPTransportOpts{
+		ListenAddr: "127.0.0.1:6881",
+		InfoHash:   infoHash,
+		Handshake:  p2p.DefaultHandshakeFunc,
+		Decoder:    &p2p.BinaryDecoder{},
+	}
+	tcpOpts2 := p2p.TCPTransportOpts{
+		ListenAddr: "127.0.0.1:6882",
+		InfoHash:   infoHash,
+		Handshake:  p2p.DefaultHandshakeFunc,
+		Decoder:    &p2p.BinaryDecoder{},
+	}
 
-	readyChans := make([]chan struct{}, len(ports))
+	server1 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+		Transport:        p2p.NewTCPTransport(tcpOpts1),
+		TCPTransportOpts: tcpOpts1,
+		TrackerUrl:       trackerUrl, // no tracker, rely on bootstrapNetwork()
+	})
 
-	for i := 0; i < 3; i++ {
-		ready := make(chan struct{})
-		readyChans[i] = ready
+	server2 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+		Transport:        p2p.NewTCPTransport(tcpOpts2),
+		TCPTransportOpts: tcpOpts2,
+		TrackerUrl:       trackerUrl,
+	})
 
-		tcpOpts := p2p.TCPTransportOpts{
-			ListenAddr: ports[i],
-			InfoHash:   infoHash,
-			Handshake:  p2p.DefaultHandshakeFunc,
-			Decoder:    &p2p.BinaryDecoder{},
+	go func() {
+		if err := server1.Start(); err != nil {
+			log.Fatal(err)
 		}
+	}()
+	go func() {
+		if err := server2.Start(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
-		tcpTransport := p2p.NewTCPTransport(tcpOpts)
+	// Give them time to bootstrap
+	time.Sleep(2 * time.Second)
 
-		server := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
-			Transport:        tcpTransport,
-			TCPTransportOpts: tcpOpts,
-			TrackerUrl:       "http://localhost:8080/announce",
-		})
-		servers[i] = server
-
-		go func(s *torrentserver.TorrentServer, ready chan struct{}) {
-			if err := s.Start(); err != nil {
-				log.Fatal(err)
-			}
-			close(ready) // signal that server is ready
-		}(server, ready)
+	// Wait until server1 sees a peer
+	for len(server1.Swarm().Peers()) == 0 {
+		time.Sleep(200 * time.Millisecond)
 	}
 
-	// wait for all servers to be ready
-	for _, ch := range readyChans {
-		<-ch
-	}
+	log.Println("Peers connected! Sending messages…")
 
-	log.Println("All servers are ready. Sending messages...")
+	// Send messages both ways
+	_ = server1.RequestPiece(0)
+	_ = server2.RequestPiece(1)
 
-	// give a tiny delay to let peers connect and swarm populate
-	time.Sleep(1 * time.Second)
-
-	select {} // block forever
+	select {}
 }

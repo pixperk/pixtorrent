@@ -60,6 +60,7 @@ func (ts *TorrentServer) Swarm() *p2p.Swarm {
 
 // Request a piece (simulate sending a request RPC)
 func (ts *TorrentServer) RequestPiece(pieceIndex int) error {
+	fmt.Println("RequestPiece called for piece index:", pieceIndex)
 	payload := append([]byte{p2p.MsgRequestPiece}, byte(pieceIndex))
 	for _, peer := range ts.swarm.Peers() {
 		if err := peer.Send(payload); err != nil {
@@ -106,16 +107,6 @@ func (ts *TorrentServer) Start() error {
 
 	time.Sleep(500 * time.Millisecond)
 
-	/* go func() {
-		if err := ts.AnnounceHave(0); err != nil {
-			log.Printf("AnnounceHave error: %v", err)
-		}
-	}()
-	go func() {
-		if err := ts.RequestPiece(1); err != nil {
-			log.Printf("RequestPiece error: %v", err)
-		}
-	}() */
 	ts.loop()
 	return nil
 }
