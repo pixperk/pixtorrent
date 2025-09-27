@@ -48,7 +48,6 @@ func (p *TCPPeer) Send(data []byte) error {
 
 	select {
 	case p.outbox <- buf:
-		log.Printf("[ENQUEUE] queued %d bytes to %s", len(buf), p.RemoteAddr())
 		return nil
 	default:
 		return errors.New("outbox full, cannot send message")
@@ -220,8 +219,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			return
 		}
 
-		rpc.From = conn.RemoteAddr().String()
-		fmt.Printf("[%s] received RPC: %+v\n", rpc.From, rpc)
+		rpc.From = From{PeerID: peer.ID(), Addr: peer.RemoteAddr().String()}
 
 		select {
 		case t.rpcch <- rpc:

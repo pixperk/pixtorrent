@@ -31,7 +31,7 @@ func main() {
 	server1 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 		Transport:        p2p.NewTCPTransport(tcpOpts1),
 		TCPTransportOpts: tcpOpts1,
-		TrackerUrl:       trackerUrl, // no tracker, rely on bootstrapNetwork()
+		TrackerUrl:       trackerUrl,
 	})
 
 	server2 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
@@ -60,10 +60,20 @@ func main() {
 	}
 
 	log.Println("Peers connected! Sending messages…")
+	//debug swarm log
+	for _, peer := range server1.Swarm().Peers() {
+		log.Printf("Server1 connected to peer: %x", peer.ID())
+	}
+	for _, peer := range server2.Swarm().Peers() {
+		log.Printf("Server2 connected to peer: %x", peer.ID())
+	}
 
 	// Send messages both ways
 	_ = server1.RequestPiece(0)
 	_ = server2.RequestPiece(1)
+	if err := server1.SendPiece(6, server2.PeerID()); err != nil {
+		log.Printf("SendPiece error: %v", err)
+	}
 
 	select {}
 }

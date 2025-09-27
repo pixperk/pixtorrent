@@ -10,7 +10,12 @@ const (
 	MsgChoke        = 0x07
 )
 
+type From struct {
+	PeerID [20]byte
+	Addr   string
+}
+
 type RPC struct {
-	From    string
+	From    From
 	Payload []byte
 }

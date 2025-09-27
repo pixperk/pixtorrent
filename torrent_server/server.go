@@ -22,7 +22,7 @@ type TorrentServer struct {
 	TorrentServerOpts
 	swarm *p2p.Swarm
 
-	peerID string
+	peerID [20]byte
 
 	quitch chan struct{}
 
@@ -56,6 +56,10 @@ func NewTorrentServer(opts TorrentServerOpts) *TorrentServer {
 
 func (ts *TorrentServer) Swarm() *p2p.Swarm {
 	return ts.swarm
+}
+
+func (ts *TorrentServer) PeerID() [20]byte {
+	return ts.peerID
 }
 
 // Request a piece (simulate sending a request RPC)
@@ -131,27 +135,25 @@ func (ts *TorrentServer) loop() {
 			}
 
 			msgType := rpc.Payload[0]
-			fmt.Printf("Received RPC type %d from %s\n", msgType, rpc.From)
 			payloadData := rpc.Payload[1:]
-			fmt.Printf("Payload data: %x\n", payloadData)
-
+			fromaddr, fromid := rpc.From.Addr, rpc.From.PeerID
 			switch msgType {
 			case p2p.MsgInterested:
-				fmt.Printf("[INTERESTED] from %s\n", rpc.From)
+				fmt.Printf("[INTERESTED] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 			case p2p.MsgRequestPiece:
-				fmt.Printf("[REQUEST PIECE] from %s, data: %x\n", rpc.From, payloadData)
+				fmt.Printf("[REQUEST PIECE] from [Peer -> ID %x ; Addr %s], data: %x\n", fromid, fromaddr, payloadData)
 			case p2p.MsgSendPiece:
-				fmt.Printf("[SEND PIECE] from %s, data len: %d\n", rpc.From, len(payloadData))
+				fmt.Printf("[SEND PIECE] from [Peer -> ID %x ; Addr %s], data len: %d\n", fromid, fromaddr, len(payloadData))
 			case p2p.MsgHave:
-				fmt.Printf("[HAVE] from %s, piece index: %x\n", rpc.From, payloadData)
+				fmt.Printf("[HAVE] from [Peer -> ID %x ; Addr %s], piece index: %x\n", fromid, fromaddr, payloadData)
 			case p2p.MsgBitfield:
-				fmt.Printf("[BITFIELD] from %s, data: %x\n", rpc.From, payloadData)
+				fmt.Printf("[BITFIELD] from [Peer -> ID %x ; Addr %s], data: %x\n", fromid, fromaddr, payloadData)
 			case p2p.MsgChoke:
-				fmt.Printf("[CHOKE] from %s\n", rpc.From)
+				fmt.Printf("[CHOKE] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 			case p2p.MsgUnchoke:
-				fmt.Printf("[UNCHOKE] from %s\n", rpc.From)
+				fmt.Printf("[UNCHOKE] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 			default:
-				fmt.Printf("[UNKNOWN MSG %d] from %s, data: %x\n", msgType, rpc.From, payloadData)
+				fmt.Printf("[UNKNOWN MSG %d] from [Peer -> ID %x ; Addr %s], data: %x\n", msgType, fromid, fromaddr, payloadData)
 			}
 
 		case <-ts.quitch:
@@ -178,7 +180,8 @@ func (ts *TorrentServer) bootstrapNetwork() error {
 }
 
 func (ts *TorrentServer) populateBootstrapNodes() error {
-	tc := client.NewTrackerClient(ts.peerID, ts.Transport.Port())
+	hexEncodedID := fmt.Sprintf("%x", ts.peerID)
+	tc := client.NewTrackerClient(hexEncodedID, ts.Transport.Port())
 
 	resp, err := tc.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, 0, "started")
 	if err != nil {
@@ -212,8 +215,8 @@ func formatAddr(ip string, port int) string {
 	return fmt.Sprintf("%s:%d", ip, port)
 }
 
-func newPeerId() string {
-	id := make([]byte, 20)
+func newPeerId() [20]byte {
+	id := [20]byte{}
 
 	// dynamic prefix: -XXYYYY-
 	id[0] = '-'
@@ -230,7 +233,7 @@ func newPeerId() string {
 		panic(err)
 	}
 
-	return string(id)
+	return id
 }
 
 func randomLetter() byte {
