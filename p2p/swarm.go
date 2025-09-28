@@ -9,12 +9,14 @@ type Swarm struct {
 	peers    map[[20]byte]Peer
 	mu       sync.Mutex
 	infoHash [20]byte
+	pieces   *PieceManager
 }
 
-func NewSwarm(infoHash [20]byte) *Swarm {
+func NewSwarm(infoHash [20]byte, pieceMgr *PieceManager) *Swarm {
 	return &Swarm{
 		peers:    make(map[[20]byte]Peer),
 		infoHash: infoHash,
+		pieces:   pieceMgr,
 	}
 }
 
@@ -60,7 +62,14 @@ func (s *Swarm) OnPeer(p Peer) error {
 	fmt.Printf("peer %x joined torrent %x\n", p.ID(), s.infoHash)
 	s.peers[p.ID()] = p
 
-	//TODO : send initial bitfield message
+	bitfield := s.pieces.Bitfield()
+	msg := append([]byte{MsgBitfield}, bitfield...)
+	if err := p.Send(msg); err != nil {
+		fmt.Printf("failed to send bitfield to %s: %v\n", p.ID(), err)
+		_ = p.Close()
+		delete(s.peers, p.ID())
+		return fmt.Errorf("failed to send bitfield to %s: %v", p.ID(), err)
+	}
 
 	return nil
 }
@@ -84,4 +93,8 @@ func (s *Swarm) Close() {
 		_ = p.Close()
 		delete(s.peers, id)
 	}
+}
+
+func (s *Swarm) MissingPieces(bitfield []byte) []int {
+	return s.pieces.MissingPieces(bitfield)
 }

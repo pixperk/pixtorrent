@@ -29,14 +29,14 @@ type TorrentServer struct {
 	bootstrapNodes []string
 }
 
-func NewTorrentServer(opts TorrentServerOpts) *TorrentServer {
+func NewTorrentServer(opts TorrentServerOpts, pieceMgr *p2p.PieceManager) *TorrentServer {
 	ts := &TorrentServer{
 		TorrentServerOpts: opts,
 		peerID:            newPeerId(),
 		quitch:            make(chan struct{}),
 	}
 
-	ts.swarm = p2p.NewSwarm(opts.TCPTransportOpts.InfoHash)
+	ts.swarm = p2p.NewSwarm(opts.TCPTransportOpts.InfoHash, pieceMgr)
 
 	// prefer a transport supplied by caller; otherwise create one
 	if opts.Transport != nil {
@@ -149,7 +149,7 @@ func (ts *TorrentServer) loop() {
 			case p2p.MsgHave:
 				fmt.Printf("[HAVE] from [Peer -> ID %x ; Addr %s], piece index: %x\n", fromid, fromaddr, payloadData)
 			case p2p.MsgBitfield:
-				fmt.Printf("[BITFIELD] from [Peer -> ID %x ; Addr %s], data: %x\n", fromid, fromaddr, payloadData)
+				ts.handleBitfieldAnnouncement(rpc, payloadData)
 			case p2p.MsgChoke:
 				fmt.Printf("[CHOKE] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 			case p2p.MsgUnchoke:

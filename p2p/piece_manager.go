@@ -56,3 +56,23 @@ func (pm *PieceManager) Bitfield() []byte {
 	}
 	return bitfield
 }
+
+func (pm *PieceManager) MissingPieces(bitfield []byte) []int {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	missing := []int{}
+	for i := 0; i < pm.numPieces; i++ {
+		byteIndex := i / 8
+		bitIndex := 7 - (i % 8)
+		if byteIndex >= len(bitfield) {
+			break
+		}
+
+		peerHas := (bitfield[byteIndex] & (1 << bitIndex)) != 0
+		if peerHas && !pm.HavePiece(i) {
+			missing = append(missing, i)
+		}
+	}
+	return missing
+}

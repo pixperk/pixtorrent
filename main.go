@@ -16,29 +16,54 @@ func main() {
 
 	// Create TCP transports
 	tcpOpts1 := p2p.TCPTransportOpts{
-		ListenAddr: "127.0.0.1:6881",
+		ListenAddr: "127.0.0.1:3000",
 		InfoHash:   infoHash,
 		Handshake:  p2p.DefaultHandshakeFunc,
 		Decoder:    &p2p.BinaryDecoder{},
 	}
 	tcpOpts2 := p2p.TCPTransportOpts{
-		ListenAddr: "127.0.0.1:6882",
+		ListenAddr: "127.0.0.1:4000",
+		InfoHash:   infoHash,
+		Handshake:  p2p.DefaultHandshakeFunc,
+		Decoder:    &p2p.BinaryDecoder{},
+	}
+	tcpOpts3 := p2p.TCPTransportOpts{
+		ListenAddr: "127.0.0.1:5000",
 		InfoHash:   infoHash,
 		Handshake:  p2p.DefaultHandshakeFunc,
 		Decoder:    &p2p.BinaryDecoder{},
 	}
 
+	data := []byte("hello world")
+	pieceSize := 5
+	numPieces := (len(data) + pieceSize - 1) / pieceSize
+
+	pm1 := p2p.NewPieceManager(numPieces)
+	pm2 := p2p.NewPieceManager(numPieces)
+	pm3 := p2p.NewPieceManager(numPieces)
+
+	// assign some pieces
+	pm1.AddPiece(0, data[0:5])  // "hello"
+	pm2.AddPiece(1, data[5:10]) // " worl"
+	pm3.AddPiece(2, data[10:])  // "d"
+
 	server1 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 		Transport:        p2p.NewTCPTransport(tcpOpts1),
 		TCPTransportOpts: tcpOpts1,
 		TrackerUrl:       trackerUrl,
-	})
+	}, pm1)
 
 	server2 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 		Transport:        p2p.NewTCPTransport(tcpOpts2),
 		TCPTransportOpts: tcpOpts2,
 		TrackerUrl:       trackerUrl,
-	})
+	}, pm2)
+
+	server3 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+		Transport:        p2p.NewTCPTransport(tcpOpts3),
+		TCPTransportOpts: tcpOpts3,
+		TrackerUrl:       trackerUrl,
+	}, pm3)
 
 	go func() {
 		if err := server1.Start(); err != nil {
@@ -51,31 +76,18 @@ func main() {
 		}
 	}()
 
+	go func() {
+		if err := server3.Start(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
 	// Give them time to bootstrap
 	time.Sleep(2 * time.Second)
 
 	// Wait until server1 sees a peer
 	for len(server1.Swarm().Peers()) == 0 {
 		time.Sleep(200 * time.Millisecond)
-	}
-
-	log.Println("Peers connected! Sending messages…")
-	//debug swarm log
-	var srv2PeerID [20]byte
-	for _, peer := range server1.Swarm().Peers() {
-		srv2PeerID = peer.ID()
-		log.Printf("Server1 connected to peer: %x", peer.ID())
-
-	}
-	for _, peer := range server2.Swarm().Peers() {
-		log.Printf("Server2 connected to peer: %x", peer.ID())
-	}
-
-	// Send messages both ways
-	_ = server1.RequestPiece(0)
-	_ = server2.RequestPiece(1)
-	if err := server1.SendPiece(6, srv2PeerID); err != nil {
-		panic("SendPiece error:	 " + err.Error())
 	}
 
 	select {}
