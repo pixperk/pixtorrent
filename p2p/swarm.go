@@ -115,3 +115,8 @@ func (s *Swarm) AddPiece(idx int, data []byte) error {
 	}
 	return nil
 }
+
+func (s *Swarm) AllPiecesReceived() bool {
+	fmt.Printf("pieces received: %d / %d\n", len(s.pieces.pieces), s.pieces.numPieces)
+	return len(s.pieces.pieces) == s.pieces.numPieces
+}

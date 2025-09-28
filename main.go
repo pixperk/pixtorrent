@@ -35,8 +35,7 @@ func main() {
 	} */
 
 	data := []byte("hello world")
-	pieceSize := 5
-	numPieces := (len(data) + pieceSize - 1) / pieceSize
+	numPieces := 2
 
 	pm1 := p2p.NewPieceManager(numPieces)
 	pm2 := p2p.NewPieceManager(numPieces)

@@ -108,6 +108,14 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 	//announce to all peers that we have this piece now
 	pieceIndex := index
 	ts.announceHave(pieceIndex)
+
+	if ts.swarm.AllPiecesReceived() {
+		fmt.Println("All pieces received!")
+		fullData := ts.ReconstructData()
+		if fullData != nil {
+			fmt.Printf("Reconstructed data: %s\n", string(fullData))
+		}
+	}
 }
 
 func (ts *TorrentServer) announceHave(pieceIndex int) error {
@@ -117,9 +125,6 @@ func (ts *TorrentServer) announceHave(pieceIndex int) error {
 			fmt.Printf("failed to announce have to %s: %v\n", peer.ID(), err)
 		}
 	}
-	/* data := ts.ReconstructData()
-	if data != nil {
-		fmt.Printf("pieces received :  Reconstructed data: %s\n", string(data))
-	} */
+
 	return nil
 }
