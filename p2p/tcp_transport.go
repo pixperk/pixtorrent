@@ -26,7 +26,7 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	p := &TCPPeer{
 		Conn:     conn,
 		outbound: outbound,
-		outbox:   make(chan []byte, 16),
+		outbox:   make(chan []byte, 2048),
 	}
 
 	go p.writeLoop()

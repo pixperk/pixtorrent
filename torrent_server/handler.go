@@ -45,9 +45,7 @@ func (ts *TorrentServer) handlePieceRequest(msg p2p.RPC, pieceIdx int) {
 		fmt.Printf("piece %d not found to send to %x\n", pieceIdx, fromid)
 		return
 	}
-	//send both piece index and data
-	// Encode piece index as 1 byte (assuming less than 256 pieces for simplicity)
-	// In a real implementation, you might want to use more bytes for larger indices
+
 	indexByte := byte(pieceIdx)
 	payload := append([]byte{p2p.MsgSendPiece, indexByte}, data...)
 	peer, exists := ts.swarm.GetPeer(fromid)
@@ -129,6 +127,15 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 			}
 
 			fmt.Printf("Data successfully stored at %s\n", filePath)
+		}
+	} else {
+		//send bitfield of available pieces to all peers
+		bitfield := ts.swarm.Bitfield()
+		payload := append([]byte{p2p.MsgBitfield}, bitfield...)
+		for _, peer := range ts.swarm.Peers() {
+			if err := peer.Send(payload); err != nil {
+				fmt.Printf("failed to send bitfield to %s: %v\n", peer.ID(), err)
+			}
 		}
 	}
 }

@@ -18,7 +18,7 @@ func NewSwarm(localPeerId [20]byte, infoHash [20]byte, pieceMgr *PieceManager) *
 		peers:       make(map[[20]byte]Peer),
 		infoHash:    infoHash,
 		pieces:      pieceMgr,
-		localPeerID: [20]byte{},
+		localPeerID: localPeerId,
 	}
 }
 
@@ -119,4 +119,8 @@ func (s *Swarm) AddPiece(idx int, data []byte) error {
 func (s *Swarm) AllPiecesReceived() bool {
 	fmt.Printf("pieces received: %d / %d\n", len(s.pieces.pieces), s.pieces.numPieces)
 	return len(s.pieces.pieces) == s.pieces.numPieces
+}
+
+func (s *Swarm) Bitfield() []byte {
+	return s.pieces.Bitfield()
 }

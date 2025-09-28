@@ -2,95 +2,76 @@ package main
 
 import (
 	"log"
-	"time"
+	"math/rand"
+	"os" // <-- needed to read file
 
 	"github.com/pixperk/pixtorrent/p2p"
 	torrentserver "github.com/pixperk/pixtorrent/torrent_server"
 )
 
 func main() {
-
 	trackerUrl := "http://localhost:8080"
 	infoHash := [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 		11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 
-	// Create TCP transports
-	tcpOpts1 := p2p.TCPTransportOpts{
-		ListenAddr: "127.0.0.1:3000",
-		InfoHash:   infoHash,
-		Handshake:  p2p.DefaultHandshakeFunc,
-		Decoder:    &p2p.BinaryDecoder{},
-	}
-	tcpOpts2 := p2p.TCPTransportOpts{
-		ListenAddr: "127.0.0.1:4000",
-		InfoHash:   infoHash,
-		Handshake:  p2p.DefaultHandshakeFunc,
-		Decoder:    &p2p.BinaryDecoder{},
-	}
-	tcpOpts3 := p2p.TCPTransportOpts{
-		ListenAddr: "127.0.0.1:5000",
-		InfoHash:   infoHash,
-		Handshake:  p2p.DefaultHandshakeFunc,
-		Decoder:    &p2p.BinaryDecoder{},
+	// Fake text data
+	//data1 := []byte("This is a longer fake file buffer to test partial piece distribution across peers!!!")
+
+	// Real image file
+	data2, err := os.ReadFile("image.png") // make sure image.png is in the same dir
+	if err != nil {
+		log.Fatalf("failed to read image: %v", err)
 	}
 
-	data := []byte("hello world")
-	pieceSize := 5
+	// For now let’s distribute the image instead of data1:
+	data := data2
+
+	pieceSize := 10 * 1024 // 10KB pieces for images (instead of 10 bytes)
 	numPieces := (len(data) + pieceSize - 1) / pieceSize
 
 	pm1 := p2p.NewPieceManager(numPieces)
 	pm2 := p2p.NewPieceManager(numPieces)
 	pm3 := p2p.NewPieceManager(numPieces)
+	pms := []*p2p.PieceManager{pm1, pm2, pm3}
 
-	// assign some pieces
-	pm1.AddPiece(0, data[0:5])  // "hello"
-	pm2.AddPiece(1, data[5:10]) // " world"
-	pm3.AddPiece(2, data[10:])  // "d"
-
-	server1 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
-		Transport:        p2p.NewTCPTransport(tcpOpts1),
-		TCPTransportOpts: tcpOpts1,
-		TrackerUrl:       trackerUrl,
-		RootDir:          "server1_data",
-	}, pm1)
-
-	server2 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
-		Transport:        p2p.NewTCPTransport(tcpOpts2),
-		TCPTransportOpts: tcpOpts2,
-		TrackerUrl:       trackerUrl,
-		RootDir:          "server2_data",
-	}, pm2)
-
-	server3 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
-		Transport:        p2p.NewTCPTransport(tcpOpts3),
-		TCPTransportOpts: tcpOpts3,
-		TrackerUrl:       trackerUrl,
-		RootDir:          "server3_data",
-	}, pm3)
-
-	go func() {
-		if err := server1.Start(); err != nil {
-			log.Fatal(err)
+	// Seed pieces randomly
+	for i := 0; i < numPieces; i++ {
+		start := i * pieceSize
+		end := start + pieceSize
+		if end > len(data) {
+			end = len(data)
 		}
-	}()
-	go func() {
-		if err := server2.Start(); err != nil {
-			log.Fatal(err)
-		}
-	}()
+		peerIndex := rand.Intn(len(pms))
+		pms[peerIndex].AddPiece(i, data[start:end])
+		log.Printf("Assigned piece %d to peer %d (%d bytes)\n", i, peerIndex+1, end-start)
+	}
 
-	go func() {
-		if err := server3.Start(); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	// TCP transports
+	tcpOpts := []p2p.TCPTransportOpts{
+		{ListenAddr: "127.0.0.1:3000", InfoHash: infoHash, Handshake: p2p.DefaultHandshakeFunc, Decoder: &p2p.BinaryDecoder{}},
+		{ListenAddr: "127.0.0.1:4000", InfoHash: infoHash, Handshake: p2p.DefaultHandshakeFunc, Decoder: &p2p.BinaryDecoder{}},
+		{ListenAddr: "127.0.0.1:5000", InfoHash: infoHash, Handshake: p2p.DefaultHandshakeFunc, Decoder: &p2p.BinaryDecoder{}},
+	}
 
-	// Give them time to bootstrap
-	time.Sleep(2 * time.Second)
+	servers := []*torrentserver.TorrentServer{
+		torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+			Transport: p2p.NewTCPTransport(tcpOpts[0]), TCPTransportOpts: tcpOpts[0], TrackerUrl: trackerUrl, RootDir: "server1_data",
+		}, pm1),
+		torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+			Transport: p2p.NewTCPTransport(tcpOpts[1]), TCPTransportOpts: tcpOpts[1], TrackerUrl: trackerUrl, RootDir: "server2_data",
+		}, pm2),
+		torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+			Transport: p2p.NewTCPTransport(tcpOpts[2]), TCPTransportOpts: tcpOpts[2], TrackerUrl: trackerUrl, RootDir: "server3_data",
+		}, pm3),
+	}
 
-	// Wait until server1 sees a peer
-	for len(server1.Swarm().Peers()) == 0 {
-		time.Sleep(200 * time.Millisecond)
+	// Start servers
+	for _, srv := range servers {
+		go func(s *torrentserver.TorrentServer) {
+			if err := s.Start(); err != nil {
+				log.Fatal(err)
+			}
+		}(srv)
 	}
 
 	select {}
