@@ -16,6 +16,7 @@ type TorrentServerOpts struct {
 	Transport        p2p.Transport
 	TCPTransportOpts p2p.TCPTransportOpts
 	TrackerUrl       string
+	RootDir          string
 }
 
 type TorrentServer struct {
@@ -97,8 +98,6 @@ func (ts *TorrentServer) loop() {
 				fmt.Printf("[KEEP-ALIVE] from %s\n", rpc.From)
 				continue
 			}
-
-			//TODO : implement handling
 
 			msgType := rpc.Payload[0]
 			payloadData := rpc.Payload[1:]

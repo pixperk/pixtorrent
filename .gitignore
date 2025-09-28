@@ -31,3 +31,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 .vscode/
+
+
+#server data directories
+server1_data/
+server2_data/
+server3_data/

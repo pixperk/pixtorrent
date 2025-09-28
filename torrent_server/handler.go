@@ -2,6 +2,8 @@ package torrentserver
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/pixperk/pixtorrent/p2p"
 )
@@ -113,7 +115,20 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 		fmt.Println("All pieces received!")
 		fullData := ts.ReconstructData()
 		if fullData != nil {
-			fmt.Printf("Reconstructed data: %s\n", string(fullData))
+
+			if err := os.MkdirAll(ts.RootDir, os.ModePerm); err != nil {
+				fmt.Printf("Failed to create directory %s: %v\n", ts.RootDir, err)
+				return
+			}
+
+			filePath := filepath.Join(ts.RootDir, fmt.Sprintf("%x.data", ts.TCPTransportOpts.InfoHash))
+
+			if err := os.WriteFile(filePath, fullData, 0644); err != nil {
+				fmt.Printf("Failed to write file %s: %v\n", filePath, err)
+				return
+			}
+
+			fmt.Printf("Data successfully stored at %s\n", filePath)
 		}
 	}
 }
