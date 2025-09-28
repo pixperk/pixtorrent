@@ -6,17 +6,19 @@ import (
 )
 
 type Swarm struct {
-	peers    map[[20]byte]Peer
-	mu       sync.Mutex
-	infoHash [20]byte
-	pieces   *PieceManager
+	peers       map[[20]byte]Peer
+	mu          sync.Mutex
+	infoHash    [20]byte
+	pieces      *PieceManager
+	localPeerID [20]byte
 }
 
-func NewSwarm(infoHash [20]byte, pieceMgr *PieceManager) *Swarm {
+func NewSwarm(localPeerId [20]byte, infoHash [20]byte, pieceMgr *PieceManager) *Swarm {
 	return &Swarm{
-		peers:    make(map[[20]byte]Peer),
-		infoHash: infoHash,
-		pieces:   pieceMgr,
+		peers:       make(map[[20]byte]Peer),
+		infoHash:    infoHash,
+		pieces:      pieceMgr,
+		localPeerID: [20]byte{},
 	}
 }
 
@@ -97,4 +99,19 @@ func (s *Swarm) Close() {
 
 func (s *Swarm) MissingPieces(bitfield []byte) []int {
 	return s.pieces.MissingPieces(bitfield)
+}
+
+func (s *Swarm) GetPiece(idx int) ([]byte, bool) {
+	return s.pieces.GetPiece(idx)
+}
+
+func (s *Swarm) NumPieces() int {
+	return s.pieces.numPieces
+}
+
+func (s *Swarm) AddPiece(idx int, data []byte) error {
+	if err := s.pieces.AddPiece(idx, data); err != nil {
+		return err
+	}
+	return nil
 }

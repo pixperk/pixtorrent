@@ -60,13 +60,13 @@ func (p *TCPPeer) writeLoop() {
 		for tot < len(buf) {
 			n, err := p.Write(buf[tot:])
 			if err != nil {
-				log.Printf("[PEER_WRITE_ERROR] failed to write to %s: %v", p.RemoteAddr(), err)
+				log.Printf("[PEER_WRITE_ERROR] failed to write to %s: %v", p.LocalAddr(), err)
 				return
 			}
 			tot += n
 		}
 
-		log.Printf("[SENT] sent %d bytes to %s", len(buf), p.RemoteAddr())
+		log.Printf("[SENT] sent %d bytes to %s", len(buf), p.LocalAddr())
 	}
 }
 
@@ -219,7 +219,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			return
 		}
 
-		rpc.From = From{PeerID: peer.ID(), Addr: peer.RemoteAddr().String()}
+		rpc.From = From{PeerID: peer.ID(), Addr: peer.LocalAddr().String()}
 
 		select {
 		case t.rpcch <- rpc:

@@ -36,7 +36,7 @@ func NewTorrentServer(opts TorrentServerOpts, pieceMgr *p2p.PieceManager) *Torre
 		quitch:            make(chan struct{}),
 	}
 
-	ts.swarm = p2p.NewSwarm(opts.TCPTransportOpts.InfoHash, pieceMgr)
+	ts.swarm = p2p.NewSwarm(ts.peerID, opts.TCPTransportOpts.InfoHash, pieceMgr)
 
 	// prefer a transport supplied by caller; otherwise create one
 	if opts.Transport != nil {
@@ -60,42 +60,6 @@ func (ts *TorrentServer) Swarm() *p2p.Swarm {
 
 func (ts *TorrentServer) PeerID() [20]byte {
 	return ts.peerID
-}
-
-// Request a piece (simulate sending a request RPC)
-func (ts *TorrentServer) RequestPiece(pieceIndex int) error {
-	fmt.Println("RequestPiece called for piece index:", pieceIndex)
-	payload := append([]byte{p2p.MsgRequestPiece}, byte(pieceIndex))
-	for _, peer := range ts.swarm.Peers() {
-		if err := peer.Send(payload); err != nil {
-			fmt.Printf("failed to request piece from %s: %v\n", peer.ID(), err)
-		}
-	}
-	return nil
-}
-
-// Respond to a piece request
-func (ts *TorrentServer) SendPiece(pieceIndex int, peerID [20]byte) error {
-	payload := append([]byte{p2p.MsgSendPiece}, []byte(fmt.Sprintf("piece-%d-data", pieceIndex))...)
-	peer, exists := ts.swarm.GetPeer(peerID)
-	if !exists {
-		return fmt.Errorf("peer %x not found", peerID)
-	}
-	if err := peer.Send(payload); err != nil {
-		return fmt.Errorf("failed to send piece to %x: %v", peerID, err)
-	}
-	return nil
-}
-
-// Announce that we have a piece (Have message)
-func (ts *TorrentServer) AnnounceHave(pieceIndex int) error {
-	payload := append([]byte{p2p.MsgHave}, byte(pieceIndex))
-	for _, peer := range ts.swarm.Peers() {
-		if err := peer.Send(payload); err != nil {
-			fmt.Printf("failed to announce have to %s: %v\n", peer.ID(), err)
-		}
-	}
-	return nil
 }
 
 func (ts *TorrentServer) Start() error {
@@ -143,9 +107,10 @@ func (ts *TorrentServer) loop() {
 			case p2p.MsgInterested:
 				fmt.Printf("[INTERESTED] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 			case p2p.MsgRequestPiece:
-				fmt.Printf("[REQUEST PIECE] from [Peer -> ID %x ; Addr %s], data: %x\n", fromid, fromaddr, payloadData)
+				ts.handlePieceRequest(rpc, int(payloadData[0]))
 			case p2p.MsgSendPiece:
-				fmt.Printf("[SEND PIECE] from [Peer -> ID %x ; Addr %s], data len: %d\n", fromid, fromaddr, len(payloadData))
+				ts.handlePiece(rpc, payloadData)
+
 			case p2p.MsgHave:
 				fmt.Printf("[HAVE] from [Peer -> ID %x ; Addr %s], piece index: %x\n", fromid, fromaddr, payloadData)
 			case p2p.MsgBitfield:

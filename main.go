@@ -27,12 +27,12 @@ func main() {
 		Handshake:  p2p.DefaultHandshakeFunc,
 		Decoder:    &p2p.BinaryDecoder{},
 	}
-	tcpOpts3 := p2p.TCPTransportOpts{
+	/* 	tcpOpts3 := p2p.TCPTransportOpts{
 		ListenAddr: "127.0.0.1:5000",
 		InfoHash:   infoHash,
 		Handshake:  p2p.DefaultHandshakeFunc,
 		Decoder:    &p2p.BinaryDecoder{},
-	}
+	} */
 
 	data := []byte("hello world")
 	pieceSize := 5
@@ -40,12 +40,12 @@ func main() {
 
 	pm1 := p2p.NewPieceManager(numPieces)
 	pm2 := p2p.NewPieceManager(numPieces)
-	pm3 := p2p.NewPieceManager(numPieces)
+	/* 	pm3 := p2p.NewPieceManager(numPieces) */
 
 	// assign some pieces
-	pm1.AddPiece(0, data[0:5])  // "hello"
-	pm2.AddPiece(1, data[5:10]) // " worl"
-	pm3.AddPiece(2, data[10:])  // "d"
+	pm1.AddPiece(0, data[0:5]) // "hello"
+	pm2.AddPiece(1, data[5:])  // " world"
+	/* pm3.AddPiece(2, data[10:])  // "d" */
 
 	server1 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 		Transport:        p2p.NewTCPTransport(tcpOpts1),
@@ -59,11 +59,11 @@ func main() {
 		TrackerUrl:       trackerUrl,
 	}, pm2)
 
-	server3 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
+	/* 	server3 := torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 		Transport:        p2p.NewTCPTransport(tcpOpts3),
 		TCPTransportOpts: tcpOpts3,
 		TrackerUrl:       trackerUrl,
-	}, pm3)
+	}, pm3) */
 
 	go func() {
 		if err := server1.Start(); err != nil {
@@ -76,11 +76,12 @@ func main() {
 		}
 	}()
 
-	go func() {
+	/* go func() {
 		if err := server3.Start(); err != nil {
 			log.Fatal(err)
 		}
 	}()
+	*/
 
 	// Give them time to bootstrap
 	time.Sleep(2 * time.Second)

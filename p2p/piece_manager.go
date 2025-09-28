@@ -18,12 +18,12 @@ func NewPieceManager(numPieces int) *PieceManager {
 	}
 }
 
-func (pm *PieceManager) HavePiece(idx int) bool {
+func (pm *PieceManager) GetPiece(idx int) ([]byte, bool) {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	_, exists := pm.pieces[idx]
-	return exists
+	data, exists := pm.pieces[idx]
+	return data, exists
 }
 
 func (pm *PieceManager) AddPiece(idx int, data []byte) error {
@@ -70,8 +70,10 @@ func (pm *PieceManager) MissingPieces(bitfield []byte) []int {
 		}
 
 		peerHas := (bitfield[byteIndex] & (1 << bitIndex)) != 0
-		if peerHas && !pm.HavePiece(i) {
-			missing = append(missing, i)
+		if peerHas {
+			if _, ok := pm.pieces[i]; !ok {
+				missing = append(missing, i)
+			}
 		}
 	}
 	return missing
