@@ -17,6 +17,7 @@ type TorrentServerOpts struct {
 	TCPTransportOpts p2p.TCPTransportOpts
 	TrackerUrl       string
 	RootDir          string
+	FileFormat       string
 }
 
 type TorrentServer struct {

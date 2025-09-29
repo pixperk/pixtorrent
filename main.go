@@ -11,6 +11,7 @@ import (
 
 func main() {
 	trackerUrl := "http://localhost:8080"
+	fileFormat := "png"
 	infoHash := [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 		11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 
@@ -56,12 +57,15 @@ func main() {
 	servers := []*torrentserver.TorrentServer{
 		torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 			Transport: p2p.NewTCPTransport(tcpOpts[0]), TCPTransportOpts: tcpOpts[0], TrackerUrl: trackerUrl, RootDir: "server1_data",
+			FileFormat: fileFormat,
 		}, pm1),
 		torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 			Transport: p2p.NewTCPTransport(tcpOpts[1]), TCPTransportOpts: tcpOpts[1], TrackerUrl: trackerUrl, RootDir: "server2_data",
+			FileFormat: fileFormat,
 		}, pm2),
 		torrentserver.NewTorrentServer(torrentserver.TorrentServerOpts{
 			Transport: p2p.NewTCPTransport(tcpOpts[2]), TCPTransportOpts: tcpOpts[2], TrackerUrl: trackerUrl, RootDir: "server3_data",
+			FileFormat: fileFormat,
 		}, pm3),
 	}
 

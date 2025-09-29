@@ -119,7 +119,7 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 				return
 			}
 
-			filePath := filepath.Join(ts.RootDir, fmt.Sprintf("%x.data", ts.TCPTransportOpts.InfoHash))
+			filePath := filepath.Join(ts.RootDir, fmt.Sprintf("%x.%s", ts.TCPTransportOpts.InfoHash, ts.FileFormat))
 
 			if err := os.WriteFile(filePath, fullData, 0644); err != nil {
 				fmt.Printf("Failed to write file %s: %v\n", filePath, err)
