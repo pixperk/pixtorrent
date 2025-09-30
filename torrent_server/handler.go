@@ -101,10 +101,10 @@ func (ts *TorrentServer) ReconstructData() []byte {
 
 func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 	index := int(data[0])
-	ts.swarm.AddPiece(index, data[1:])
+
 	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, data[1:], msg.From.PeerID)
-	//set the piece as available in the swarm
 	ts.swarm.AddPiece(index, data[1:])
+	//set the piece as available in the swarm
 	//announce to all peers that we have this piece now
 	pieceIndex := index
 	ts.announceHave(pieceIndex)
