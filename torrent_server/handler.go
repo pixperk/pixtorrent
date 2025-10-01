@@ -15,9 +15,7 @@ func (ts *TorrentServer) handleBitfieldAnnouncement(msg p2p.RPC, bitfield []byte
 	missing := ts.swarm.MissingPieces(bitfield)
 	fmt.Printf("[MISSING PIECES] from [Peer -> ID %x ; Addr %s]: %x\n", fromid, fromaddr, missing)
 
-	//request first missing piece
 	if len(missing) > 0 {
-		//send missing piece request at intervals of 500 ms
 		for _, pieceIdx := range missing {
 			err := ts.requestPiece(pieceIdx)
 			if err != nil {
@@ -104,10 +102,14 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 
 	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, data[1:], msg.From.PeerID)
 	ts.swarm.AddPiece(index, data[1:])
-	//set the piece as available in the swarm
-	//announce to all peers that we have this piece now
 	pieceIndex := index
 	ts.announceHave(pieceIndex)
+
+	go func() {
+		if err := ts.UpdateTrackerStats(); err != nil {
+			fmt.Printf("Failed to update tracker stats: %v\n", err)
+		}
+	}()
 
 	if ts.swarm.AllPiecesReceived() {
 		fmt.Println("All pieces received!")
@@ -127,9 +129,14 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 			}
 
 			fmt.Printf("Data successfully stored at %s\n", filePath)
+
+			go func() {
+				if err := ts.AnnounceToTracker("completed"); err != nil {
+					fmt.Printf("Failed to announce completion to tracker: %v\n", err)
+				}
+			}()
 		}
 	} else {
-		//send bitfield of available pieces to all peers
 		bitfield := ts.swarm.Bitfield()
 		payload := append([]byte{p2p.MsgBitfield}, bitfield...)
 		for _, peer := range ts.swarm.Peers() {
@@ -149,4 +156,59 @@ func (ts *TorrentServer) announceHave(pieceIndex int) error {
 	}
 
 	return nil
+}
+
+func (ts *TorrentServer) AnnounceToTracker(event string) error {
+	if ts.trackerClient == nil {
+		return fmt.Errorf("tracker client not initialized")
+	}
+
+	left := int64(ts.swarm.NumPieces() - len(ts.swarm.Peers()))
+	if ts.swarm.AllPiecesReceived() {
+		left = 0
+	}
+
+	resp, err := ts.trackerClient.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, left, event)
+	if err != nil {
+		return fmt.Errorf("failed to announce to tracker: %v", err)
+	}
+
+	fmt.Printf("[TRACKER ANNOUNCE] Event: %s, Interval: %ds, Peers returned: %d\n",
+		event, resp.Interval, len(resp.Peers))
+
+	return nil
+}
+
+func (ts *TorrentServer) ScrapeTracker() error {
+	if ts.trackerClient == nil {
+		return fmt.Errorf("tracker client not initialized")
+	}
+
+	resp, err := ts.trackerClient.Scrape(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash)
+	if err != nil {
+		return fmt.Errorf("failed to scrape tracker: %v", err)
+	}
+
+	fmt.Printf("[TRACKER SCRAPE] Complete: %d, Incomplete: %d, Downloaded: %d\n",
+		resp.Complete, resp.Incomplete, resp.Downloaded)
+
+	return nil
+}
+
+func (ts *TorrentServer) UpdateTrackerStats() error {
+	if ts.trackerClient == nil {
+		return fmt.Errorf("tracker client not initialized")
+	}
+
+	uploaded := int64(len(ts.swarm.Peers()) * 1024)
+	downloaded := int64(0)
+
+	for i := 0; i < ts.swarm.NumPieces(); i++ {
+		if _, ok := ts.swarm.GetPiece(i); ok {
+			downloaded += 1024
+		}
+	}
+
+	ts.trackerClient.UpdateStats(uploaded, downloaded)
+	return ts.AnnounceToTracker("")
 }

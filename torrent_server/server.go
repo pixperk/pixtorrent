@@ -29,6 +29,7 @@ type TorrentServer struct {
 	quitch chan struct{}
 
 	bootstrapNodes []string
+	trackerClient  *client.TrackerClient
 }
 
 func NewTorrentServer(opts TorrentServerOpts, pieceMgr *p2p.PieceManager) *TorrentServer {
@@ -40,10 +41,12 @@ func NewTorrentServer(opts TorrentServerOpts, pieceMgr *p2p.PieceManager) *Torre
 
 	ts.swarm = p2p.NewSwarm(ts.peerID, opts.TCPTransportOpts.InfoHash, pieceMgr)
 
-	// prefer a transport supplied by caller; otherwise create one
+	// Initialize tracker client
+	hexEncodedID := fmt.Sprintf("%x", ts.peerID)
+	ts.trackerClient = client.NewTrackerClient(hexEncodedID, 0) // port will be set after transport starts
+
 	if opts.Transport != nil {
 		ts.Transport = opts.Transport
-		// try to wire OnPeer if this is actually a *TCPTransport
 		if tt, ok := ts.Transport.(*p2p.TCPTransport); ok {
 			tt.OnPeer = ts.swarm.OnPeer
 		}
@@ -69,6 +72,10 @@ func (ts *TorrentServer) Start() error {
 		return err
 	}
 
+	// Update tracker client with actual port after transport starts
+	hexEncodedID := fmt.Sprintf("%x", ts.peerID)
+	ts.trackerClient = client.NewTrackerClient(hexEncodedID, ts.Transport.Port())
+
 	time.Sleep(500 * time.Millisecond)
 
 	if err := ts.bootstrapNetwork(); err != nil {
@@ -91,6 +98,10 @@ func (ts *TorrentServer) loop() {
 		log.Println("torrent server stopped")
 		ts.Stop()
 	}()
+
+	// Periodic tracker announce ticker
+	announceTicker := time.NewTicker(30 * time.Minute) // announce every 30 minutes
+	defer announceTicker.Stop()
 
 	for {
 		select {
@@ -123,7 +134,21 @@ func (ts *TorrentServer) loop() {
 				fmt.Printf("[UNKNOWN MSG %d] from [Peer -> ID %x ; Addr %s], data: %x\n", msgType, fromid, fromaddr, payloadData)
 			}
 
+		case <-announceTicker.C:
+			// Periodic tracker announce
+			go func() {
+				if err := ts.AnnounceToTracker(""); err != nil {
+					fmt.Printf("Periodic tracker announce failed: %v\n", err)
+				}
+			}()
+
 		case <-ts.quitch:
+			// Announce stopped before shutting down
+			go func() {
+				if err := ts.AnnounceToTracker("stopped"); err != nil {
+					fmt.Printf("Failed to announce stop to tracker: %v\n", err)
+				}
+			}()
 			return
 		}
 	}
@@ -147,10 +172,7 @@ func (ts *TorrentServer) bootstrapNetwork() error {
 }
 
 func (ts *TorrentServer) populateBootstrapNodes() error {
-	hexEncodedID := fmt.Sprintf("%x", ts.peerID)
-	tc := client.NewTrackerClient(hexEncodedID, ts.Transport.Port())
-
-	resp, err := tc.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, 0, "started")
+	resp, err := ts.trackerClient.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, 0, "started")
 	if err != nil {
 		return err
 	}
