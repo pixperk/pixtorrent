@@ -86,18 +86,27 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		FileFormat:       downloadFormat,
 	}, pm)
 
-	fmt.Println()
-	fmt.Println("  pixTorrent Downloader")
-	fmt.Println("  ---------------------")
-	fmt.Printf("  InfoHash:   %s\n", downloadInfoHash)
-	fmt.Printf("  Pieces:     %d\n", downloadPieces)
-	fmt.Printf("  Output:     %s/\n", downloadOutput)
-	fmt.Printf("  Format:     .%s\n", downloadFormat)
-	fmt.Printf("  Tracker:    %s\n", downloadTracker)
+	PrintLogoSmall()
+	PrintHeader("DOWNLOADING")
+
+	PrintSection("Target")
+	PrintKeyValueHighlight("InfoHash", downloadInfoHash)
+	PrintKeyValue("Pieces", fmt.Sprintf("%d", downloadPieces))
+
+	PrintSection("Output")
+	PrintKeyValue("Directory", downloadOutput+"/")
+	PrintKeyValue("Format", "."+downloadFormat)
+
+	PrintSection("Network")
+	PrintKeyValue("Tracker", downloadTracker)
 	if len(pieceHashes) > 0 {
-		fmt.Println("  Verify:     enabled")
+		PrintStatus("Verify", "enabled", Green)
+	} else {
+		PrintStatus("Verify", "disabled", Yellow)
 	}
-	fmt.Println()
+
+	PrintDivider()
+	PrintInfo("Connecting to peers...")
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

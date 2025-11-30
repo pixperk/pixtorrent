@@ -90,18 +90,24 @@ func runSeed(cmd *cobra.Command, args []string) error {
 
 	pieceHashHex := fmt.Sprintf("%x", pieceHashes)
 
-	fmt.Println()
-	fmt.Println("  pixTorrent Seeder")
-	fmt.Println("  -----------------")
-	fmt.Printf("  File:       %s\n", seedFile)
-	fmt.Printf("  Size:       %d bytes\n", len(data))
-	fmt.Printf("  Pieces:     %d x %d bytes\n", numPieces, seedPieceSize)
-	fmt.Printf("  InfoHash:   %x\n", infoHash)
-	fmt.Printf("  Tracker:    %s\n", seedTracker)
-	fmt.Println()
-	fmt.Println("  To download, run:")
-	fmt.Printf("  pixtorrent download -i %x -n %d -f %s -t %s -H %s\n", infoHash, numPieces, ext, seedTracker, pieceHashHex)
-	fmt.Println()
+	PrintLogoSmall()
+	PrintHeader("SEEDING")
+
+	PrintSection("File Info")
+	PrintKeyValue("File", seedFile)
+	PrintKeyValue("Size", FormatBytes(int64(len(data))))
+	PrintKeyValue("Pieces", fmt.Sprintf("%d x %s", numPieces, FormatBytes(int64(seedPieceSize))))
+
+	PrintSection("Network")
+	PrintKeyValueHighlight("InfoHash", fmt.Sprintf("%x", infoHash))
+	PrintKeyValue("Tracker", seedTracker)
+
+	PrintSection("Download Command")
+	downloadCmd := fmt.Sprintf("pixtorrent download -i %x -n %d -f %s -t %s -H %s", infoHash, numPieces, ext, seedTracker, pieceHashHex)
+	PrintCommand(downloadCmd)
+
+	PrintDivider()
+	PrintInfo("Waiting for peers...")
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

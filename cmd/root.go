@@ -10,7 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "pixtorrent",
 	Short: "A minimalistic BitTorrent client",
-	Long:  `pixTorrent - A lightweight BitTorrent implementation in Go`,
+	Long:  Cyan + Bold + logoSmall + Reset + "\n  " + Dim + "A lightweight BitTorrent implementation in Go" + Reset,
 }
 
 func Execute() {

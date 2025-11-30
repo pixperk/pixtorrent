@@ -40,9 +40,13 @@ func init() {
 func runTracker(cmd *cobra.Command, args []string) error {
 	var store tracker.Storage
 
+	PrintLogoSmall()
+	PrintHeader("TRACKER")
+
 	if trackerMemory {
 		store = tracker.NewMemoryStorage()
-		fmt.Println("  Storage:    in-memory")
+		PrintSection("Storage")
+		PrintStatus("Type", "in-memory", Yellow)
 	} else {
 		store = tracker.NewRedisStorage(
 			context.Background(),
@@ -50,20 +54,22 @@ func runTracker(cmd *cobra.Command, args []string) error {
 			trackerRedisPwd,
 			trackerRedisDB,
 		)
-		fmt.Printf("  Storage:    redis://%s/%d\n", trackerRedis, trackerRedisDB)
+		PrintSection("Storage")
+		PrintStatus("Type", "redis", Green)
+		PrintKeyValue("Address", fmt.Sprintf("%s/%d", trackerRedis, trackerRedisDB))
 	}
 
 	t := tracker.NewTracker(trackerAddr, store)
 
-	fmt.Println()
-	fmt.Println("  pixTorrent Tracker")
-	fmt.Println("  ------------------")
-	fmt.Printf("  Address:    %s\n", trackerAddr)
-	fmt.Println()
-	fmt.Println("  Endpoints:")
-	fmt.Printf("    GET http://%s/announce\n", trackerAddr)
-	fmt.Printf("    GET http://%s/scrape\n", trackerAddr)
-	fmt.Println()
+	PrintSection("Server")
+	PrintKeyValueHighlight("Listen", trackerAddr)
+
+	PrintSection("Endpoints")
+	PrintKeyValue("Announce", fmt.Sprintf("http://localhost%s/announce", trackerAddr))
+	PrintKeyValue("Scrape", fmt.Sprintf("http://localhost%s/scrape", trackerAddr))
+
+	PrintDivider()
+	PrintInfo("Tracker is running...")
 
 	if !trackerMemory {
 		go func() {
