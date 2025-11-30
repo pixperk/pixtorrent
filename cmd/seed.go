@@ -102,9 +102,13 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	PrintKeyValueHighlight("InfoHash", fmt.Sprintf("%x", infoHash))
 	PrintKeyValue("Tracker", seedTracker)
 
-	PrintSection("Download Command")
+	PrintSection("Commands")
 	downloadCmd := fmt.Sprintf("pixtorrent download -i %x -n %d -f %s -t %s -H %s", infoHash, numPieces, ext, seedTracker, pieceHashHex)
+	connectCmd := fmt.Sprintf("pixtorrent connect -i %x -n %d -t %s", infoHash, numPieces, seedTracker)
+	PrintKeyValue("Download", "")
 	PrintCommand(downloadCmd)
+	PrintKeyValue("Connect", "")
+	PrintCommand(connectCmd)
 
 	PrintDivider()
 	PrintInfo("Waiting for peers...")
