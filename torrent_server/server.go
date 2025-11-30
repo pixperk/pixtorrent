@@ -2,6 +2,7 @@ package torrentserver
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math/big"
@@ -118,12 +119,22 @@ func (ts *TorrentServer) loop() {
 			case p2p.MsgInterested:
 				fmt.Printf("[INTERESTED] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 			case p2p.MsgRequestPiece:
-				ts.handlePieceRequest(rpc, int(payloadData[0]))
+				if len(payloadData) < 4 {
+					fmt.Printf("[ERROR] MsgRequestPiece payload too short: %d bytes\n", len(payloadData))
+					continue
+				}
+				pieceIdx := int(binary.BigEndian.Uint32(payloadData[:4]))
+				ts.handlePieceRequest(rpc, pieceIdx)
 			case p2p.MsgSendPiece:
 				ts.handlePiece(rpc, payloadData)
 
 			case p2p.MsgHave:
-				fmt.Printf("[HAVE] from [Peer -> ID %x ; Addr %s], piece index: %x\n", fromid, fromaddr, payloadData)
+				if len(payloadData) < 4 {
+					fmt.Printf("[ERROR] MsgHave payload too short: %d bytes\n", len(payloadData))
+					continue
+				}
+				pieceIdx := int(binary.BigEndian.Uint32(payloadData[:4]))
+				fmt.Printf("[HAVE] from [Peer -> ID %x ; Addr %s], piece index: %d\n", fromid, fromaddr, pieceIdx)
 			case p2p.MsgBitfield:
 				ts.handleBitfieldAnnouncement(rpc, payloadData)
 			case p2p.MsgChoke:

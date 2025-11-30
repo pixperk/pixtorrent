@@ -106,7 +106,7 @@ func (s *Swarm) GetPiece(idx int) ([]byte, bool) {
 }
 
 func (s *Swarm) NumPieces() int {
-	return s.pieces.numPieces
+	return s.pieces.NumPieces()
 }
 
 func (s *Swarm) AddPiece(idx int, data []byte) error {
@@ -117,8 +117,10 @@ func (s *Swarm) AddPiece(idx int, data []byte) error {
 }
 
 func (s *Swarm) AllPiecesReceived() bool {
-	fmt.Printf("pieces received: %d / %d\n", len(s.pieces.pieces), s.pieces.numPieces)
-	return len(s.pieces.pieces) == s.pieces.numPieces
+	received := s.pieces.ReceivedCount()
+	total := s.pieces.NumPieces()
+	fmt.Printf("pieces received: %d / %d\n", received, total)
+	return s.pieces.AllPiecesReceived()
 }
 
 func (s *Swarm) Bitfield() []byte {

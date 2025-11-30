@@ -1,6 +1,7 @@
 package torrentserver
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,7 +27,9 @@ func (ts *TorrentServer) handleBitfieldAnnouncement(msg p2p.RPC, bitfield []byte
 }
 
 func (ts *TorrentServer) requestPiece(pieceIndex int) error {
-	payload := append([]byte{p2p.MsgRequestPiece}, byte(pieceIndex))
+	idxBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(idxBytes, uint32(pieceIndex))
+	payload := append([]byte{p2p.MsgRequestPiece}, idxBytes...)
 	for _, peer := range ts.swarm.Peers() {
 		if err := peer.Send(payload); err != nil {
 			fmt.Printf("failed to request piece from %s: %v\n", peer.ID(), err)
@@ -44,8 +47,10 @@ func (ts *TorrentServer) handlePieceRequest(msg p2p.RPC, pieceIdx int) {
 		return
 	}
 
-	indexByte := byte(pieceIdx)
-	payload := append([]byte{p2p.MsgSendPiece, indexByte}, data...)
+	idxBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(idxBytes, uint32(pieceIdx))
+	payload := append([]byte{p2p.MsgSendPiece}, idxBytes...)
+	payload = append(payload, data...)
 	peer, exists := ts.swarm.GetPeer(fromid)
 	if !exists {
 		fmt.Printf("peer %x not found to send piece %d\n", fromid, pieceIdx)
@@ -98,10 +103,14 @@ func (ts *TorrentServer) ReconstructData() []byte {
 }
 
 func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
-	index := int(data[0])
+	if len(data) < 4 {
+		fmt.Printf("[ERROR] piece data too short: %d bytes\n", len(data))
+		return
+	}
+	index := int(binary.BigEndian.Uint32(data[:4]))
 
-	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, data[1:], msg.From.PeerID)
-	ts.swarm.AddPiece(index, data[1:])
+	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, data[4:], msg.From.PeerID)
+	ts.swarm.AddPiece(index, data[4:])
 	pieceIndex := index
 	ts.announceHave(pieceIndex)
 
@@ -148,7 +157,9 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 }
 
 func (ts *TorrentServer) announceHave(pieceIndex int) error {
-	payload := append([]byte{p2p.MsgHave}, byte(pieceIndex))
+	idxBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(idxBytes, uint32(pieceIndex))
+	payload := append([]byte{p2p.MsgHave}, idxBytes...)
 	for _, peer := range ts.swarm.Peers() {
 		if err := peer.Send(payload); err != nil {
 			fmt.Printf("failed to announce have to %s: %v\n", peer.ID(), err)

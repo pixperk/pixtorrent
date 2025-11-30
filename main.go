@@ -24,10 +24,9 @@ func main() {
 		log.Fatalf("failed to read image: %v", err)
 	}
 
-	// For now let’s distribute the image instead of data1:
 	data := data2
 
-	pieceSize := 10 * 1024 // 10KB pieces for images (instead of 10 bytes)
+	pieceSize := 10 * 1024
 	numPieces := (len(data) + pieceSize - 1) / pieceSize
 
 	pm1 := p2p.NewPieceManager(numPieces)

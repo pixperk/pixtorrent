@@ -78,3 +78,19 @@ func (pm *PieceManager) MissingPieces(bitfield []byte) []int {
 	}
 	return missing
 }
+
+func (pm *PieceManager) ReceivedCount() int {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return len(pm.pieces)
+}
+
+func (pm *PieceManager) NumPieces() int {
+	return pm.numPieces
+}
+
+func (pm *PieceManager) AllPiecesReceived() bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return len(pm.pieces) == pm.numPieces
+}

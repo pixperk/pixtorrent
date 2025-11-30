@@ -38,7 +38,6 @@ func (p *TCPPeer) Send(data []byte) error {
 	defer p.mu.Unlock()
 
 	if p.closed {
-		p.mu.Unlock()
 		return errors.New("peer is closed")
 	}
 
