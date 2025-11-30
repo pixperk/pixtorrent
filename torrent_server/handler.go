@@ -108,9 +108,15 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 		return
 	}
 	index := int(binary.BigEndian.Uint32(data[:4]))
+	pieceData := data[4:]
 
-	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, data[4:], msg.From.PeerID)
-	ts.swarm.AddPiece(index, data[4:])
+	if !ts.swarm.VerifyPiece(index, pieceData) {
+		fmt.Printf("[REJECTED] piece %d failed hash verification from %x\n", index, msg.From.PeerID)
+		return
+	}
+
+	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, pieceData, msg.From.PeerID)
+	ts.swarm.AddPiece(index, pieceData)
 	pieceIndex := index
 	ts.announceHave(pieceIndex)
 

@@ -130,3 +130,11 @@ func (s *Swarm) Bitfield() []byte {
 func (s *Swarm) MissingPiecesCount() int {
 	return s.pieces.NumPieces() - s.pieces.ReceivedCount()
 }
+
+func (s *Swarm) VerifyPiece(idx int, data []byte) bool {
+	return s.pieces.VerifyPiece(idx, data)
+}
+
+func (s *Swarm) SetPieceHashes(hashes []byte) {
+	s.pieces.SetPieceHashes(hashes)
+}

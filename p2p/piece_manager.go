@@ -1,14 +1,17 @@
 package p2p
 
 import (
+	"bytes"
+	"crypto/sha1"
 	"fmt"
 	"sync"
 )
 
 type PieceManager struct {
-	mu        sync.RWMutex
-	numPieces int
-	pieces    map[int][]byte //idx -> data
+	mu          sync.RWMutex
+	numPieces   int
+	pieces      map[int][]byte
+	pieceHashes []byte
 }
 
 func NewPieceManager(numPieces int) *PieceManager {
@@ -16,6 +19,44 @@ func NewPieceManager(numPieces int) *PieceManager {
 		numPieces: numPieces,
 		pieces:    make(map[int][]byte),
 	}
+}
+
+func NewPieceManagerWithHashes(numPieces int, pieceHashes []byte) *PieceManager {
+	return &PieceManager{
+		numPieces:   numPieces,
+		pieces:      make(map[int][]byte),
+		pieceHashes: pieceHashes,
+	}
+}
+
+func (pm *PieceManager) SetPieceHashes(hashes []byte) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.pieceHashes = hashes
+}
+
+func (pm *PieceManager) VerifyPiece(idx int, data []byte) bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	if pm.pieceHashes == nil {
+		return true
+	}
+
+	if idx < 0 || idx >= pm.numPieces {
+		return false
+	}
+
+	hashStart := idx * 20
+	hashEnd := hashStart + 20
+	if hashEnd > len(pm.pieceHashes) {
+		return false
+	}
+
+	expectedHash := pm.pieceHashes[hashStart:hashEnd]
+	actualHash := sha1.Sum(data)
+
+	return bytes.Equal(expectedHash, actualHash[:])
 }
 
 func (pm *PieceManager) GetPiece(idx int) ([]byte, bool) {
