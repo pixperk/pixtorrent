@@ -103,6 +103,9 @@ func (ts *TorrentServer) loop() {
 	announceTicker := time.NewTicker(5 * time.Minute)
 	defer announceTicker.Stop()
 
+	unchokeTicker := time.NewTicker(10 * time.Second)
+	defer unchokeTicker.Stop()
+
 	for {
 		select {
 		case rpc := <-ts.Transport.Consume():
@@ -117,6 +120,10 @@ func (ts *TorrentServer) loop() {
 			switch msgType {
 			case p2p.MsgInterested:
 				fmt.Printf("[INTERESTED] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
+				ts.swarm.SetPeerInterested(fromid, true)
+			case p2p.MsgNotInterested:
+				fmt.Printf("[NOT INTERESTED] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
+				ts.swarm.SetPeerInterested(fromid, false)
 			case p2p.MsgRequestPiece:
 				if len(payloadData) < 4 {
 					fmt.Printf("[ERROR] MsgRequestPiece payload too short: %d bytes\n", len(payloadData))
@@ -138,11 +145,16 @@ func (ts *TorrentServer) loop() {
 				ts.handleBitfieldAnnouncement(rpc, payloadData)
 			case p2p.MsgChoke:
 				fmt.Printf("[CHOKE] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
+				ts.swarm.SetPeerChoking(fromid, true)
 			case p2p.MsgUnchoke:
 				fmt.Printf("[UNCHOKE] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
+				ts.swarm.SetPeerChoking(fromid, false)
 			default:
 				fmt.Printf("[UNKNOWN MSG %d] from [Peer -> ID %x ; Addr %s], data: %x\n", msgType, fromid, fromaddr, payloadData)
 			}
+
+		case <-unchokeTicker.C:
+			ts.runUnchokeRound()
 
 		case <-announceTicker.C:
 			go func() {
@@ -156,6 +168,30 @@ func (ts *TorrentServer) loop() {
 				fmt.Printf("Failed to announce stop to tracker: %v\n", err)
 			}
 			return
+		}
+	}
+}
+
+func (ts *TorrentServer) runUnchokeRound() {
+	actions := ts.swarm.RunUnchokeAlgorithm()
+
+	for _, action := range actions {
+		peer, exists := ts.swarm.GetPeer(action.PeerID)
+		if !exists {
+			continue
+		}
+
+		var msg []byte
+		if action.Unchoke {
+			msg = []byte{p2p.MsgUnchoke}
+			fmt.Printf("[UNCHOKING] peer %x\n", action.PeerID)
+		} else {
+			msg = []byte{p2p.MsgChoke}
+			fmt.Printf("[CHOKING] peer %x\n", action.PeerID)
+		}
+
+		if err := peer.Send(msg); err != nil {
+			fmt.Printf("failed to send choke/unchoke to %x: %v\n", action.PeerID, err)
 		}
 	}
 }

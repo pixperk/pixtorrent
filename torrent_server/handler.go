@@ -41,6 +41,12 @@ func (ts *TorrentServer) requestPiece(pieceIndex int) error {
 func (ts *TorrentServer) handlePieceRequest(msg p2p.RPC, pieceIdx int) {
 	fromaddr, fromid := msg.From.Addr, msg.From.PeerID
 	fmt.Printf("[REQUEST PIECE] from [Peer -> ID %x ; Addr %s], piece index: %d\n", fromid, fromaddr, pieceIdx)
+
+	if ts.swarm.IsChoking(fromid) {
+		fmt.Printf("[REJECTED] peer %x is choked, ignoring request for piece %d\n", fromid, pieceIdx)
+		return
+	}
+
 	data, ok := ts.swarm.GetPiece(pieceIdx)
 	if !ok {
 		fmt.Printf("piece %d not found to send to %x\n", pieceIdx, fromid)
@@ -58,7 +64,9 @@ func (ts *TorrentServer) handlePieceRequest(msg p2p.RPC, pieceIdx int) {
 	}
 	if err := peer.Send(payload); err != nil {
 		fmt.Printf("failed to send piece %d to %x: %v\n", pieceIdx, fromid, err)
+		return
 	}
+	ts.swarm.RecordUpload(fromid, int64(len(data)))
 	fmt.Printf("[SENT PIECE] piece index %d to [Peer -> ID %x ; Addr %s]\n", pieceIdx, fromid, fromaddr)
 }
 
@@ -115,6 +123,7 @@ func (ts *TorrentServer) handlePiece(msg p2p.RPC, data []byte) {
 		return
 	}
 
+	ts.swarm.RecordDownload(msg.From.PeerID, int64(len(pieceData)))
 	fmt.Printf("[RECEIVED PIECE] piece index %d with data %x from %x\n", index, pieceData, msg.From.PeerID)
 	ts.swarm.AddPiece(index, pieceData)
 	pieceIndex := index
