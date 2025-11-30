@@ -19,11 +19,12 @@ type BinaryDecoder struct {
 }
 
 func (d *BinaryDecoder) Decode(r io.Reader, rpc *RPC) error {
+	// Cache buffered reader - safe because each connection has its own decoder
 	if d.br == nil {
 		if br, ok := r.(*bufio.Reader); ok {
 			d.br = br
 		} else {
-			d.br = bufio.NewReaderSize(r, 64*1024) // 64KB buffer
+			d.br = bufio.NewReaderSize(r, 64*1024)
 		}
 	}
 

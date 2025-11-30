@@ -208,10 +208,13 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		}
 	}
 
+	// Create a per-connection decoder with its own buffered reader
+	decoder := &BinaryDecoder{}
+
 	// Read loop
 	for {
 		rpc := RPC{}
-		err = t.Decoder.Decode(conn, &rpc)
+		err = decoder.Decode(conn, &rpc)
 		if err != nil {
 			fmt.Printf("[%s] decode error: %v\n", conn.RemoteAddr(), err)
 			return

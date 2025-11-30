@@ -233,15 +233,12 @@ func (ts *TorrentServer) populateBootstrapNodes() error {
 			continue
 		}
 
-		if ts.Transport.Addr() > addr {
-			continue
-		}
-
 		if _, exists := unique[addr]; !exists {
 			unique[addr] = struct{}{}
 			ts.bootstrapNodes = append(ts.bootstrapNodes, addr)
 		}
 	}
+	fmt.Printf("[TRACKER] Found %d peers to connect to\n", len(ts.bootstrapNodes))
 
 	return nil
 }
