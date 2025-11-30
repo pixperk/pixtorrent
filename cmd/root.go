@@ -10,13 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "pixtorrent",
 	Short: "A minimalistic BitTorrent client",
-	Long: `pixTorrent - A lightweight BitTorrent implementation in Go
-
-Features:
-  - Piece hash verification for data integrity
-  - Tit-for-tat choking/unchoking algorithm
-  - Rarest-first piece selection
-  - Redis-backed tracker`,
+	Long:  `pixTorrent - A lightweight BitTorrent implementation in Go`,
 }
 
 func Execute() {

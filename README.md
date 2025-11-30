@@ -17,36 +17,90 @@ The system demonstrates advanced concepts in distributed computing, network prog
 
 ### Prerequisites
 
-- Go 1.19+ (with modules support)
-- Docker & Docker Compose (Redis dependency)
-- Unix-like environment (Linux/macOS/WSL)
+- Go 1.21+
+- Redis (optional, for persistent tracker storage)
 
-### Deployment
+### Installation
 
-1. **Repository setup:**
-   ```bash
-   git clone https://github.com/pixperk/pixtorrent.git
-   cd pixtorrent
-   go mod tidy
-   ```
+```bash
+git clone https://github.com/pixperk/pixtorrent.git
+cd pixtorrent
+go build -o pixtorrent .
+```
 
-2. **Initialize Redis backend:**
-   ```bash
-   make dkr
-   ```
+## CLI Usage
 
-3. **Launch tracker service:**
-   ```bash
-   make run-tracker
-   ```
-   Tracker HTTP server binds to `localhost:8080`
+### Start the Tracker
 
-4. **Start P2P network simulation:**
-   ```bash
-   make run
-   ```
+```bash
+# In-memory tracker (no Redis required)
+./pixtorrent tracker -m
 
-This initializes a 3-node P2P network with automatic peer discovery, piece distribution, and file reconstruction. The system demonstrates real-world P2P behavior including handshake negotiation, bitfield synchronization, and distributed chunk assembly.
+# With Redis backend
+./pixtorrent tracker -r localhost:6379
+```
+
+### Seed a File
+
+```bash
+./pixtorrent seed -f myfile.png -t http://localhost:8080
+```
+
+Output:
+```
+  pixTorrent Seeder
+  -----------------
+  File:       myfile.png
+  Size:       102400 bytes
+  Pieces:     7 x 16384 bytes
+  InfoHash:   a1b2c3d4...
+  Tracker:    http://localhost:8080
+
+  To download, run:
+  pixtorrent download -i a1b2c3d4... -n 7 -f png -t http://localhost:8080 -H <piece-hashes>
+```
+
+### Download a File
+
+Copy the download command from the seeder output:
+
+```bash
+./pixtorrent download -i <info-hash> -n <num-pieces> -f png -t http://localhost:8080 -H <piece-hashes>
+```
+
+### Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `tracker` | Start BitTorrent tracker server |
+| `seed` | Seed a file to the network |
+| `download` | Download a file by info hash |
+
+### Flags
+
+**Tracker:**
+```
+-a, --addr string       Address to listen on (default ":8080")
+-m, --memory            Use in-memory storage (no Redis)
+-r, --redis string      Redis address (default "localhost:6379")
+```
+
+**Seed:**
+```
+-f, --file string       File to seed (required)
+-p, --port string       Port to listen on (default "0" for random)
+-t, --tracker string    Tracker URL (default "http://localhost:8080")
+-s, --piece-size int    Piece size in bytes (default 16384)
+```
+
+**Download:**
+```
+-i, --hash string       Info hash (40 hex chars, required)
+-n, --pieces int        Number of pieces (default 1)
+-f, --format string     Output file extension (default "bin")
+-o, --output string     Output directory (default "downloads")
+-t, --tracker string    Tracker URL (default "http://localhost:8080")
+```
 
 ## How It All Works
 
@@ -95,12 +149,14 @@ The protocol defines a compact message structure for minimal network overhead:
 ```
 
 **Core Message Types:**
-- `MsgInterested` (0x01) - Peer capability negotiation
-- `MsgRequestPiece` (0x02) - Piece download request with index
-- `MsgSendPiece` (0x03) - Piece data transmission
-- `MsgHave` (0x04) - Piece availability announcement
-- `MsgBitfield` (0x05) - Complete piece availability map
-- `MsgChoke/Unchoke` (0x06/0x07) - Flow control signaling
+- `MsgInterested` (0x01) - Peer interest declaration
+- `MsgNotInterested` (0x02) - Peer disinterest declaration
+- `MsgRequestPiece` (0x03) - Piece download request with index
+- `MsgSendPiece` (0x04) - Piece data transmission
+- `MsgHave` (0x05) - Piece availability announcement
+- `MsgBitfield` (0x06) - Complete piece availability map
+- `MsgUnchoke` (0x07) - Allow peer to request pieces
+- `MsgChoke` (0x08) - Block peer from requesting pieces
 
 ## System Architecture
 
@@ -111,8 +167,8 @@ pixtorrent/
 ├── client/         # Tracker communication client with announce/scrape support
 ├── p2p/           # Peer wire protocol, transport layer, and swarm management
 ├── torrent_server/ # Main orchestration server with lifecycle management
-├── cmd/           # CLI utilities and integration examples
-└── main.go        # Multi-peer network simulation and demonstration
+├── cmd/           # Cobra CLI commands (seed, download, tracker)
+└── main.go        # CLI entry point
 ```
 
 ### Core Components
@@ -194,35 +250,22 @@ Peers automatically discover each other through tracker announce cycles. The sys
 - Cross-session peer state recovery
 - Statistics aggregation with time-series data
 
+## Implemented Features
+
+- **Rarest-First Piece Selection**: Prioritizes downloading rare pieces to improve swarm health
+- **Tit-for-Tat Choking**: Fair bandwidth allocation with optimistic unchoking for peer discovery
+- **Piece Hash Verification**: SHA1 verification ensures data integrity
+- **In-Memory Tracker**: Run without Redis for quick testing
+
 ## Future Development Roadmap
 
 ### Distributed Hash Table (DHT) Implementation
 Transition to fully decentralized peer discovery eliminating single points of failure:
 
 - **Kademlia DHT**: Implement distributed peer routing with XOR metric
-- **Bootstrap Nodes**: Seed network with well-known DHT participants  
+- **Bootstrap Nodes**: Seed network with well-known DHT participants
 - **Peer Routing**: Logarithmic lookup complexity for O(log N) discovery
 - **Network Resilience**: Eliminate tracker dependency for improved fault tolerance
-
-### Advanced Piece Selection Algorithms
-
-**Rarest First Strategy**:
-```go
-type RarestFirstSelector struct {
-    pieceFrequency map[int]int
-    availabilityMap map[PeerID]bitfield.Bitfield
-}
-```
-
-**Pipeline Optimization**:
-- Request queue management with adaptive window sizing
-- End-game mode for completion optimization
-- Piece priority queuing based on request frequency
-
-**Performance Enhancements**:
-- **Super-seeding**: Optimized upload strategies for initial seeders
-- **Fast Peer Detection**: Bandwidth-based peer prioritization
-- **Locality Awareness**: Geographic or network-proximity peer preference
 
 ### Protocol Extensions
 
@@ -231,10 +274,10 @@ type RarestFirstSelector struct {
 - **WebRTC Support**: Browser-based peer connections
 - **uTP Implementation**: Congestion-aware UDP transport
 
-**Security Features**:
-- **Peer Reputation System**: Trust metrics and misbehavior detection
-- **Message Authentication**: Cryptographic message integrity
-- **Bandwidth Enforcement**: Rate limiting and fair sharing algorithms
+**Enhancements**:
+- **End-game Mode**: Fast completion when few pieces remain
+- **Super-seeding**: Optimized upload for initial seeders
+- **Peer Reputation**: Trust metrics and misbehavior detection
 
 ## Testing and Validation
 
