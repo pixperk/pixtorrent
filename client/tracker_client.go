@@ -194,17 +194,22 @@ func (tc *TrackerClient) Scrape(trackerURL string, infoHash [20]byte) (*ScrapeRe
 	if !ok {
 		return nil, fmt.Errorf("missing files in scrape response")
 	}
-	// Use the first info_hash key
 	for _, v := range files {
 		stats, ok := v.(meta.BDict)
 		if !ok {
 			continue
 		}
-		return &ScrapeResponse{
-			Complete:   int(stats["complete"].(meta.BInt)),
-			Incomplete: int(stats["incomplete"].(meta.BInt)),
-			Downloaded: int(stats["downloaded"].(meta.BInt)),
-		}, nil
+		response := &ScrapeResponse{}
+		if complete, ok := stats["complete"].(meta.BInt); ok {
+			response.Complete = int(complete)
+		}
+		if incomplete, ok := stats["incomplete"].(meta.BInt); ok {
+			response.Incomplete = int(incomplete)
+		}
+		if downloaded, ok := stats["downloaded"].(meta.BInt); ok {
+			response.Downloaded = int(downloaded)
+		}
+		return response, nil
 	}
 	return nil, fmt.Errorf("no stats found")
 }

@@ -100,8 +100,7 @@ func (ts *TorrentServer) loop() {
 		ts.Stop()
 	}()
 
-	// Periodic tracker announce ticker
-	announceTicker := time.NewTicker(30 * time.Minute) // announce every 30 minutes
+	announceTicker := time.NewTicker(5 * time.Minute)
 	defer announceTicker.Stop()
 
 	for {
@@ -146,7 +145,6 @@ func (ts *TorrentServer) loop() {
 			}
 
 		case <-announceTicker.C:
-			// Periodic tracker announce
 			go func() {
 				if err := ts.AnnounceToTracker(""); err != nil {
 					fmt.Printf("Periodic tracker announce failed: %v\n", err)
@@ -154,12 +152,9 @@ func (ts *TorrentServer) loop() {
 			}()
 
 		case <-ts.quitch:
-			// Announce stopped before shutting down
-			go func() {
-				if err := ts.AnnounceToTracker("stopped"); err != nil {
-					fmt.Printf("Failed to announce stop to tracker: %v\n", err)
-				}
-			}()
+			if err := ts.AnnounceToTracker("stopped"); err != nil {
+				fmt.Printf("Failed to announce stop to tracker: %v\n", err)
+			}
 			return
 		}
 	}

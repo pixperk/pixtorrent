@@ -219,44 +219,66 @@ func (r *RedisStorage) UpdatePeerLastSeen(peerID string) error {
 }
 
 func (r *RedisStorage) CleanupExpiredPeers() error {
-	keys, err := r.client.Keys(r.ctx, "peer:*").Result()
-	if err != nil {
-		return err
-	}
-
 	cutoff := time.Now().Add(-30 * time.Minute).Unix()
 
-	for _, key := range keys {
-		lastSeenStr, err := r.client.HGet(r.ctx, key, "last_seen").Result()
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.client.Scan(r.ctx, cursor, "peer:*", 100).Result()
 		if err != nil {
-			continue
+			return err
 		}
 
-		lastSeen, err := strconv.ParseInt(lastSeenStr, 10, 64)
-		if err != nil {
-			continue
-		}
-
-		if lastSeen < cutoff {
-			peerID := key[5:]
-
-			torrentKeys, _ := r.client.Keys(r.ctx, "torrent:*:peers").Result()
-			for _, torrentKey := range torrentKeys {
-				r.client.SRem(r.ctx, torrentKey, peerID)
+		for _, key := range keys {
+			lastSeenStr, err := r.client.HGet(r.ctx, key, "last_seen").Result()
+			if err != nil {
+				continue
 			}
 
-			r.client.Del(r.ctx, key)
+			lastSeen, err := strconv.ParseInt(lastSeenStr, 10, 64)
+			if err != nil {
+				continue
+			}
+
+			if lastSeen < cutoff {
+				peerID := key[5:]
+
+				torrentKeys := r.scanKeys("torrent:*:peers")
+				for _, torrentKey := range torrentKeys {
+					r.client.SRem(r.ctx, torrentKey, peerID)
+				}
+
+				r.client.Del(r.ctx, key)
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
 		}
 	}
 
 	return nil
 }
 
-func (r *RedisStorage) GetActiveTorrents() ([]string, error) {
-	keys, err := r.client.Keys(r.ctx, "torrent:*:peers").Result()
-	if err != nil {
-		return nil, err
+func (r *RedisStorage) scanKeys(pattern string) []string {
+	var keys []string
+	var cursor uint64
+	for {
+		batch, nextCursor, err := r.client.Scan(r.ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			break
+		}
+		keys = append(keys, batch...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
 	}
+	return keys
+}
+
+func (r *RedisStorage) GetActiveTorrents() ([]string, error) {
+	keys := r.scanKeys("torrent:*:peers")
 
 	torrents := make([]string, 0, len(keys))
 	for _, key := range keys {

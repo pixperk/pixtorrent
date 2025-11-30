@@ -162,16 +162,14 @@ func (t *TCPTransport) acceptLoop() {
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
-
 			fmt.Printf("tcp accept error: %v\n", err)
-
+			continue
 		}
 
 		fmt.Printf("new tcp connection from %s\n", conn.RemoteAddr().String())
 
 		go t.handleConn(conn, false)
 	}
-
 }
 
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
