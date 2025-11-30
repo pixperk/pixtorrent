@@ -23,11 +23,16 @@ func (ts *TorrentServer) handleBitfieldAnnouncement(msg p2p.RPC, bitfield []byte
 		if !exists {
 			return
 		}
-		for _, pieceIdx := range rarestPieces {
-			if err := ts.requestPieceFromPeer(peer, pieceIdx); err != nil {
-				fmt.Printf("failed to request piece %d from %x: %v\n", pieceIdx, fromid, err)
-			}
+
+		// Send INTERESTED message to let peer know we want pieces
+		if err := peer.Send([]byte{p2p.MsgInterested}); err != nil {
+			fmt.Printf("failed to send interested to %x: %v\n", fromid, err)
+			return
 		}
+		fmt.Printf("[SENT INTERESTED] to [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
+
+		// Store pending requests - will be sent when we receive UNCHOKE
+		ts.storePendingRequests(fromid, rarestPieces)
 	}
 }
 
@@ -194,6 +199,36 @@ func (ts *TorrentServer) announceHave(pieceIndex int) error {
 	}
 
 	return nil
+}
+
+func (ts *TorrentServer) storePendingRequests(peerID [20]byte, pieces []int) {
+	ts.pendingMu.Lock()
+	defer ts.pendingMu.Unlock()
+	ts.pendingRequests[peerID] = pieces
+}
+
+func (ts *TorrentServer) sendPendingRequests(peerID [20]byte) {
+	ts.pendingMu.Lock()
+	pieces, exists := ts.pendingRequests[peerID]
+	if exists {
+		delete(ts.pendingRequests, peerID)
+	}
+	ts.pendingMu.Unlock()
+
+	if !exists || len(pieces) == 0 {
+		return
+	}
+
+	peer, exists := ts.swarm.GetPeer(peerID)
+	if !exists {
+		return
+	}
+
+	for _, pieceIdx := range pieces {
+		if err := ts.requestPieceFromPeer(peer, pieceIdx); err != nil {
+			fmt.Printf("failed to request piece %d from %x: %v\n", pieceIdx, peerID, err)
+		}
+	}
 }
 
 func (ts *TorrentServer) AnnounceToTracker(event string) error {

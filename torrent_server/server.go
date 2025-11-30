@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pixperk/pixtorrent/client"
@@ -29,8 +30,10 @@ type TorrentServer struct {
 
 	quitch chan struct{}
 
-	bootstrapNodes []string
-	trackerClient  *client.TrackerClient
+	bootstrapNodes  []string
+	trackerClient   *client.TrackerClient
+	pendingRequests map[[20]byte][]int
+	pendingMu       sync.Mutex
 }
 
 func NewTorrentServer(opts TorrentServerOpts, pieceMgr *p2p.PieceManager) *TorrentServer {
@@ -38,6 +41,7 @@ func NewTorrentServer(opts TorrentServerOpts, pieceMgr *p2p.PieceManager) *Torre
 		TorrentServerOpts: opts,
 		peerID:            newPeerId(),
 		quitch:            make(chan struct{}),
+		pendingRequests:   make(map[[20]byte][]int),
 	}
 
 	ts.swarm = p2p.NewSwarm(ts.peerID, opts.TCPTransportOpts.InfoHash, pieceMgr)
@@ -150,6 +154,8 @@ func (ts *TorrentServer) loop() {
 			case p2p.MsgUnchoke:
 				fmt.Printf("[UNCHOKE] from [Peer -> ID %x ; Addr %s]\n", fromid, fromaddr)
 				ts.swarm.SetPeerChoking(fromid, false)
+				// Now we can send pending piece requests
+				ts.sendPendingRequests(fromid)
 			default:
 				fmt.Printf("[UNKNOWN MSG %d] from [Peer -> ID %x ; Addr %s], data: %x\n", msgType, fromid, fromaddr, payloadData)
 			}
