@@ -13,13 +13,18 @@ func (ts *TorrentServer) handleBitfieldAnnouncement(msg p2p.RPC, bitfield []byte
 	fromaddr, fromid := msg.From.Addr, msg.From.PeerID
 	fmt.Printf("[BITFIELD] from [Peer -> ID %x ; Addr %s], data: %x\n", fromid, fromaddr, bitfield)
 
-	missing := ts.swarm.MissingPieces(bitfield)
-	fmt.Printf("[MISSING PIECES] from [Peer -> ID %x ; Addr %s]: %x\n", fromid, fromaddr, missing)
+	ts.swarm.UpdatePeerBitfield(fromid, bitfield)
 
-	if len(missing) > 0 {
-		for _, pieceIdx := range missing {
-			err := ts.requestPiece(pieceIdx)
-			if err != nil {
+	rarestPieces := ts.swarm.GetRarestMissingPieces(bitfield)
+	fmt.Printf("[RAREST PIECES] from [Peer -> ID %x ; Addr %s]: %v\n", fromid, fromaddr, rarestPieces)
+
+	if len(rarestPieces) > 0 {
+		peer, exists := ts.swarm.GetPeer(fromid)
+		if !exists {
+			return
+		}
+		for _, pieceIdx := range rarestPieces {
+			if err := ts.requestPieceFromPeer(peer, pieceIdx); err != nil {
 				fmt.Printf("failed to request piece %d from %x: %v\n", pieceIdx, fromid, err)
 			}
 		}
@@ -36,6 +41,13 @@ func (ts *TorrentServer) requestPiece(pieceIndex int) error {
 		}
 	}
 	return nil
+}
+
+func (ts *TorrentServer) requestPieceFromPeer(peer p2p.Peer, pieceIndex int) error {
+	idxBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(idxBytes, uint32(pieceIndex))
+	payload := append([]byte{p2p.MsgRequestPiece}, idxBytes...)
+	return peer.Send(payload)
 }
 
 func (ts *TorrentServer) handlePieceRequest(msg p2p.RPC, pieceIdx int) {

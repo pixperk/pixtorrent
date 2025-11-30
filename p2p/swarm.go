@@ -14,12 +14,13 @@ const (
 )
 
 type Swarm struct {
-	peers       map[[20]byte]Peer
-	peerStates  map[[20]byte]*PeerState
-	mu          sync.Mutex
-	infoHash    [20]byte
-	pieces      *PieceManager
-	localPeerID [20]byte
+	peers        map[[20]byte]Peer
+	peerStates   map[[20]byte]*PeerState
+	peerBitfields map[[20]byte][]byte
+	mu           sync.Mutex
+	infoHash     [20]byte
+	pieces       *PieceManager
+	localPeerID  [20]byte
 
 	optimisticPeer  [20]byte
 	unchokeRound    int
@@ -27,11 +28,12 @@ type Swarm struct {
 
 func NewSwarm(localPeerId [20]byte, infoHash [20]byte, pieceMgr *PieceManager) *Swarm {
 	return &Swarm{
-		peers:       make(map[[20]byte]Peer),
-		peerStates:  make(map[[20]byte]*PeerState),
-		infoHash:    infoHash,
-		pieces:      pieceMgr,
-		localPeerID: localPeerId,
+		peers:         make(map[[20]byte]Peer),
+		peerStates:    make(map[[20]byte]*PeerState),
+		peerBitfields: make(map[[20]byte][]byte),
+		infoHash:      infoHash,
+		pieces:        pieceMgr,
+		localPeerID:   localPeerId,
 	}
 }
 
@@ -55,6 +57,7 @@ func (s *Swarm) RemovePeer(id [20]byte) {
 		_ = p.Close()
 		delete(s.peers, id)
 		delete(s.peerStates, id)
+		delete(s.peerBitfields, id)
 		fmt.Printf("peer %s removed from swarm\n", id)
 	}
 }
@@ -284,4 +287,88 @@ func (s *Swarm) IsChoking(id [20]byte) bool {
 		return state.IsAmChoking()
 	}
 	return true
+}
+
+func (s *Swarm) UpdatePeerBitfield(id [20]byte, bitfield []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bf := make([]byte, len(bitfield))
+	copy(bf, bitfield)
+	s.peerBitfields[id] = bf
+}
+
+func (s *Swarm) SetPeerHasPiece(id [20]byte, pieceIdx int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	bf, exists := s.peerBitfields[id]
+	if !exists {
+		size := (s.pieces.NumPieces() + 7) / 8
+		bf = make([]byte, size)
+		s.peerBitfields[id] = bf
+	}
+
+	byteIndex := pieceIdx / 8
+	bitIndex := 7 - (pieceIdx % 8)
+	if byteIndex < len(bf) {
+		bf[byteIndex] |= 1 << bitIndex
+	}
+}
+
+type pieceRarity struct {
+	index int
+	count int
+}
+
+func (s *Swarm) GetRarestMissingPieces(peerBitfield []byte) []int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	numPieces := s.pieces.NumPieces()
+	availability := make([]int, numPieces)
+
+	for _, bf := range s.peerBitfields {
+		for i := 0; i < numPieces; i++ {
+			byteIndex := i / 8
+			bitIndex := 7 - (i % 8)
+			if byteIndex < len(bf) && (bf[byteIndex]&(1<<bitIndex)) != 0 {
+				availability[i]++
+			}
+		}
+	}
+
+	var candidates []pieceRarity
+	for i := 0; i < numPieces; i++ {
+		if _, exists := s.pieces.pieces[i]; exists {
+			continue
+		}
+
+		byteIndex := i / 8
+		bitIndex := 7 - (i % 8)
+		if byteIndex >= len(peerBitfield) {
+			continue
+		}
+
+		peerHas := (peerBitfield[byteIndex] & (1 << bitIndex)) != 0
+		if peerHas {
+			candidates = append(candidates, pieceRarity{
+				index: i,
+				count: availability[i],
+			})
+		}
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].count == candidates[j].count {
+			n, _ := rand.Int(rand.Reader, big.NewInt(2))
+			return n.Int64() == 0
+		}
+		return candidates[i].count < candidates[j].count
+	})
+
+	result := make([]int, len(candidates))
+	for i, c := range candidates {
+		result[i] = c.index
+	}
+	return result
 }

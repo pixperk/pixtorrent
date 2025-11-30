@@ -141,6 +141,7 @@ func (ts *TorrentServer) loop() {
 				}
 				pieceIdx := int(binary.BigEndian.Uint32(payloadData[:4]))
 				fmt.Printf("[HAVE] from [Peer -> ID %x ; Addr %s], piece index: %d\n", fromid, fromaddr, pieceIdx)
+				ts.swarm.SetPeerHasPiece(fromid, pieceIdx)
 			case p2p.MsgBitfield:
 				ts.handleBitfieldAnnouncement(rpc, payloadData)
 			case p2p.MsgChoke:
