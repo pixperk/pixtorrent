@@ -174,10 +174,7 @@ func (ts *TorrentServer) AnnounceToTracker(event string) error {
 		return fmt.Errorf("tracker client not initialized")
 	}
 
-	left := int64(ts.swarm.NumPieces() - len(ts.swarm.Peers()))
-	if ts.swarm.AllPiecesReceived() {
-		left = 0
-	}
+	left := int64(ts.swarm.MissingPiecesCount())
 
 	resp, err := ts.trackerClient.Announce(ts.TrackerUrl, ts.TCPTransportOpts.InfoHash, left, event)
 	if err != nil {

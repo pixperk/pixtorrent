@@ -126,3 +126,7 @@ func (s *Swarm) AllPiecesReceived() bool {
 func (s *Swarm) Bitfield() []byte {
 	return s.pieces.Bitfield()
 }
+
+func (s *Swarm) MissingPiecesCount() int {
+	return s.pieces.NumPieces() - s.pieces.ReceivedCount()
+}
